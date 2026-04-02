@@ -39,16 +39,16 @@ export interface FinanceState {
 }
 
 const DEFAULT_CATEGORIES: Category[] = [
-  { id: '1', name: 'Food & Dining', icon: '🍔', color: 'hsl(25, 95%, 53%)', budgetLimit: 500 },
-  { id: '2', name: 'Transport', icon: '🚗', color: 'hsl(210, 90%, 56%)', budgetLimit: 300 },
-  { id: '3', name: 'Housing', icon: '🏠', color: 'hsl(160, 84%, 39%)', budgetLimit: 1500 },
-  { id: '4', name: 'Utilities', icon: '💡', color: 'hsl(280, 70%, 55%)', budgetLimit: 200 },
-  { id: '5', name: 'Entertainment', icon: '🎬', color: 'hsl(340, 82%, 52%)', budgetLimit: 200 },
-  { id: '6', name: 'Shopping', icon: '🛍️', color: 'hsl(38, 92%, 50%)', budgetLimit: 400 },
-  { id: '7', name: 'Health', icon: '💊', color: 'hsl(0, 72%, 51%)', budgetLimit: 150 },
-  { id: '8', name: 'Business', icon: '💼', color: 'hsl(220, 60%, 50%)', budgetLimit: 0 },
-  { id: '9', name: 'Investments', icon: '📈', color: 'hsl(150, 60%, 40%)', budgetLimit: 0 },
-  { id: '10', name: 'Salary', icon: '💰', color: 'hsl(160, 84%, 39%)', budgetLimit: 0 },
+  { id: '1', name: 'Food & Dining', icon: 'utensils', color: 'hsl(25, 95%, 53%)', budgetLimit: 500 },
+  { id: '2', name: 'Transport', icon: 'car', color: 'hsl(210, 90%, 56%)', budgetLimit: 300 },
+  { id: '3', name: 'Housing', icon: 'home', color: 'hsl(160, 84%, 39%)', budgetLimit: 1500 },
+  { id: '4', name: 'Utilities', icon: 'lightbulb', color: 'hsl(280, 70%, 55%)', budgetLimit: 200 },
+  { id: '5', name: 'Entertainment', icon: 'film', color: 'hsl(340, 82%, 52%)', budgetLimit: 200 },
+  { id: '6', name: 'Shopping', icon: 'shopping-bag', color: 'hsl(38, 92%, 50%)', budgetLimit: 400 },
+  { id: '7', name: 'Health', icon: 'heart', color: 'hsl(0, 72%, 51%)', budgetLimit: 150 },
+  { id: '8', name: 'Business', icon: 'briefcase', color: 'hsl(220, 60%, 50%)', budgetLimit: 0 },
+  { id: '9', name: 'Investments', icon: 'trending-up', color: 'hsl(150, 60%, 40%)', budgetLimit: 0 },
+  { id: '10', name: 'Salary', icon: 'wallet', color: 'hsl(160, 84%, 39%)', budgetLimit: 0 },
 ];
 
 const DEFAULT_PROFILE: UserProfile = {
@@ -76,7 +76,6 @@ const SAMPLE_TRANSACTIONS: Transaction[] = [
   { id: 't8', amount: 500, type: 'income', category: 'Business', description: 'Freelance project', date: d(12), paymentMethod: 'PayPal' },
   { id: 't9', amount: 65, type: 'expense', category: 'Food & Dining', description: 'Restaurant dinner', date: d(14), paymentMethod: 'Credit Card' },
   { id: 't10', amount: 30, type: 'expense', category: 'Health', description: 'Pharmacy', date: d(15), paymentMethod: 'Debit Card' },
-  // Previous month
   { id: 't11', amount: 5000, type: 'income', category: 'Salary', description: 'Monthly salary', date: d(1, -1), paymentMethod: 'Bank Transfer' },
   { id: 't12', amount: 1200, type: 'expense', category: 'Housing', description: 'Rent payment', date: d(1, -1), paymentMethod: 'Bank Transfer' },
   { id: 't13', amount: 350, type: 'expense', category: 'Food & Dining', description: 'Groceries total', date: d(5, -1), paymentMethod: 'Credit Card' },
@@ -86,9 +85,9 @@ const SAMPLE_TRANSACTIONS: Transaction[] = [
 ];
 
 const SAMPLE_GOALS: SavingsGoal[] = [
-  { id: 'g1', name: 'Emergency Fund', targetAmount: 10000, currentAmount: 4500, deadline: new Date(currentYear, currentMonth + 6, 1).toISOString().split('T')[0], icon: '🛡️' },
-  { id: 'g2', name: 'Vacation', targetAmount: 3000, currentAmount: 1200, deadline: new Date(currentYear, currentMonth + 4, 1).toISOString().split('T')[0], icon: '✈️' },
-  { id: 'g3', name: 'New Laptop', targetAmount: 2000, currentAmount: 800, deadline: new Date(currentYear, currentMonth + 3, 1).toISOString().split('T')[0], icon: '💻' },
+  { id: 'g1', name: 'Emergency Fund', targetAmount: 10000, currentAmount: 4500, deadline: new Date(currentYear, currentMonth + 6, 1).toISOString().split('T')[0], icon: 'shield' },
+  { id: 'g2', name: 'Vacation', targetAmount: 3000, currentAmount: 1200, deadline: new Date(currentYear, currentMonth + 4, 1).toISOString().split('T')[0], icon: 'plane' },
+  { id: 'g3', name: 'New Laptop', targetAmount: 2000, currentAmount: 800, deadline: new Date(currentYear, currentMonth + 3, 1).toISOString().split('T')[0], icon: 'laptop' },
 ];
 
 const STORAGE_KEY = 'finwise-data';
