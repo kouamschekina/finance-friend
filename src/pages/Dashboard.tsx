@@ -1,29 +1,63 @@
 import { useMemo } from 'react';
 import { useFinance } from '@/contexts/FinanceContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import {
-  getCurrentMonthTransactions, getPreviousMonthTransactions,
-  formatCurrency, getCategorySpending,
+  formatCurrency, getCategorySpending, getFilteredTransactions,
 } from '@/lib/finance-store';
 import { getCategoryIcon } from '@/lib/icons';
-import { TrendingUp, TrendingDown, DollarSign, PiggyBank, ArrowUpRight, ArrowDownRight, Lightbulb } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, PiggyBank, Lightbulb } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid } from 'recharts';
+import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
+import { DateRangePicker } from '@/components/DateRangePicker';
+import { subDays, parseISO, differenceInDays, format } from 'date-fns';
 
 const CHART_COLORS = ['hsl(160,84%,39%)', 'hsl(210,90%,56%)', 'hsl(38,92%,50%)', 'hsl(340,82%,52%)', 'hsl(280,70%,55%)', 'hsl(25,95%,53%)', 'hsl(0,72%,51%)', 'hsl(220,60%,50%)'];
 
-const CustomTooltipStyle = {
-  backgroundColor: 'hsl(220, 15%, 13%)',
-  border: '1px solid hsl(220, 12%, 18%)',
-  borderRadius: '12px',
-  padding: '8px 12px',
-  color: 'hsl(210, 20%, 95%)',
-  fontSize: '12px',
-};
+function chartTooltipStyle(light: boolean) {
+  return light
+    ? {
+      backgroundColor: 'hsl(0 0% 100%)',
+      border: '1px solid hsl(214 20% 88%)',
+      borderRadius: '12px',
+      padding: '8px 12px',
+      color: 'hsl(222 38% 14%)',
+      fontSize: '12px',
+    }
+    : {
+      backgroundColor: 'hsl(222 44% 14%)',
+      border: '1px solid hsl(222 26% 20%)',
+      borderRadius: '12px',
+      padding: '8px 12px',
+      color: 'hsl(210 20% 95%)',
+      fontSize: '12px',
+    };
+}
 
 export default function Dashboard() {
-  const { transactions, categories, profile } = useFinance();
+  const { transactions, categories, profile, dateRange } = useFinance();
+  const { theme } = useTheme();
+  const tooltipStyle = chartTooltipStyle(theme === 'light');
+  const axisColor = theme === 'light' ? 'hsl(220 12% 40%)' : 'hsl(215 15% 55%)';
+  const gridColor = theme === 'light' ? 'hsl(214 20% 90%)' : 'hsl(222 26% 18%)';
 
-  const current = useMemo(() => getCurrentMonthTransactions(transactions), [transactions]);
-  const previous = useMemo(() => getPreviousMonthTransactions(transactions), [transactions]);
+  const current = useMemo(() =>
+    getFilteredTransactions(transactions, dateRange.from, dateRange.to),
+    [transactions, dateRange]);
+
+  const previous = useMemo(() => {
+    const from = parseISO(dateRange.from);
+    const to = parseISO(dateRange.to);
+    const days = differenceInDays(to, from) + 1;
+    const prevTo = subDays(from, 1);
+    const prevFrom = subDays(prevTo, days - 1);
+
+    return getFilteredTransactions(
+      transactions,
+      format(prevFrom, 'yyyy-MM-dd'),
+      format(prevTo, 'yyyy-MM-dd')
+    );
+  }, [transactions, dateRange]);
 
   const totalIncome = current.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpenses = current.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
@@ -46,6 +80,8 @@ export default function Dashboard() {
   const barData = useMemo(() => {
     const months: { name: string; income: number; expenses: number }[] = [];
     const now = new Date();
+    // Use last 4 months for comparison context in bar chart (can stay current-based or interval-based)
+    // To keep it simple, let's keep the last 4 months context
     for (let i = 3; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
@@ -70,63 +106,92 @@ export default function Dashboard() {
     return Object.entries(dailyMap)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, amount]) => ({
-        date: new Date(date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
+        date: format(parseISO(date), 'MMM dd'),
         amount,
       }));
   }, [current]);
 
   const insights = useMemo(() => {
     const result: { text: string; type: 'success' | 'warning' | 'info' }[] = [];
-    if (expenseChange > 10) result.push({ text: `Your spending is up ${Math.abs(expenseChange).toFixed(0)}% compared to last month.`, type: 'warning' });
-    else if (expenseChange < -5) result.push({ text: `Great job! You spent ${Math.abs(expenseChange).toFixed(0)}% less than last month.`, type: 'success' });
+    if (expenseChange > 10) result.push({ text: `Your spending is up ${Math.abs(expenseChange).toFixed(0)}% compared to the previous period.`, type: 'warning' });
+    else if (expenseChange < -5) result.push({ text: `Great job! You spent ${Math.abs(expenseChange).toFixed(0)}% less than the previous period.`, type: 'success' });
+
     if (savingsRate > 20) result.push({ text: `Excellent savings rate of ${savingsRate.toFixed(0)}%! Keep it up.`, type: 'success' });
     else if (savingsRate < 10 && savingsRate >= 0) result.push({ text: `Your savings rate is ${savingsRate.toFixed(0)}%. Try to aim for at least 20%.`, type: 'info' });
+
     const topCategory = pieData[0];
     if (topCategory) result.push({ text: `${topCategory.name} is your biggest expense at ${formatCurrency(topCategory.value, profile.currency)}.`, type: 'info' });
-    categories.filter(c => c.budgetLimit > 0).forEach(c => {
-      const spent = getCategorySpending(transactions, c.name);
-      const pct = (spent / c.budgetLimit) * 100;
-      if (pct >= 100) result.push({ text: `You've exceeded your ${c.name} budget!`, type: 'warning' });
+
+    categories.filter(c => c.budget_limit > 0).forEach(c => {
+      const spent = getCategorySpending(transactions, c.name, dateRange);
+      const pct = (spent / c.budget_limit) * 100;
+      if (pct >= 100) result.push({ text: `You've exceeded your ${c.name} budget for this period!`, type: 'warning' });
       else if (pct >= 80) result.push({ text: `You're at ${pct.toFixed(0)}% of your ${c.name} budget.`, type: 'warning' });
     });
-    return result.length ? result : [{ text: 'Your finances look healthy this month!', type: 'success' as const }];
-  }, [expenseChange, savingsRate, pieData, categories, transactions, profile.currency]);
+    return result.length ? result : [{ text: 'Your finances look healthy for this period!', type: 'success' as const }];
+  }, [expenseChange, savingsRate, pieData, categories, transactions, profile.currency, dateRange]);
 
   const currency = profile.currency;
 
   return (
-    <div className="space-y-5 animate-fade-in">
-      <div className="hidden lg:block">
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground text-sm">Your financial overview</p>
+    <div className="space-y-6 pb-8 sm:space-y-8 sm:pb-10">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl lg:text-4xl">
+            Overview
+          </h1>
+          <p className="text-muted-foreground text-sm font-medium">Analyze your finances by date</p>
+        </div>
+        <DateRangePicker />
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard icon={DollarSign} label="Income" value={formatCurrency(totalIncome, currency)} variant="primary" />
-        <StatCard icon={TrendingDown} label="Expenses" value={formatCurrency(totalExpenses, currency)} variant="destructive"
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-4">
+        <StatCard
+          icon={DollarSign}
+          label="Total Income"
+          value={formatCurrency(totalIncome, currency)}
+          variant="primary"
+          trend="+12%"
+        />
+        <StatCard
+          icon={TrendingDown}
+          label="Monthly Expenses"
+          value={formatCurrency(totalExpenses, currency)}
+          variant="destructive"
           badge={expenseChange !== 0 ? `${expenseChange > 0 ? '+' : ''}${expenseChange.toFixed(0)}%` : undefined}
           badgePositive={expenseChange <= 0}
         />
-        <StatCard icon={TrendingUp} label="Net Balance" value={formatCurrency(netBalance, currency)} variant={netBalance >= 0 ? 'primary' : 'destructive'} />
-        <StatCard icon={PiggyBank} label="Savings Rate" value={`${savingsRate.toFixed(0)}%`} variant="accent" />
+        <StatCard
+          icon={TrendingUp}
+          label="Available Balance"
+          value={formatCurrency(netBalance, currency)}
+          variant={netBalance >= 0 ? 'primary' : 'destructive'}
+        />
+        <StatCard
+          icon={PiggyBank}
+          label="Savings Strategy"
+          value={`${savingsRate.toFixed(0)}%`}
+          variant="accent"
+        />
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <div className="finance-card p-4">
-          <h3 className="font-semibold text-foreground text-sm mb-3">Spending by Category</h3>
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4">
+        <div className="finance-card p-4 sm:p-5 min-w-0">
+          <h3 className="font-semibold text-foreground text-sm mb-3">Spending by category</h3>
           {pieData.length > 0 ? (
-            <div className="flex items-center gap-4">
-              <ResponsiveContainer width="50%" height={160}>
-                <PieChart>
-                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={68} dataKey="value" paddingAngle={3} strokeWidth={0}>
-                    {pieData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={(v: number) => formatCurrency(v, currency)} contentStyle={CustomTooltipStyle} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="flex-1 space-y-2">
+            <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-center">
+              <div className="mx-auto w-full max-w-[200px] h-[180px] sm:mx-0 sm:w-1/2 sm:max-w-none shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={44} outerRadius={72} dataKey="value" paddingAngle={3} strokeWidth={0}>
+                      {pieData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v: number) => formatCurrency(v, currency)} contentStyle={tooltipStyle} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex-1 space-y-2 min-w-0 w-full">
                 {pieData.slice(0, 5).map((entry, i) => {
                   const Icon = getCategoryIcon(entry.name);
                   return (
@@ -146,31 +211,35 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="finance-card p-4">
-          <h3 className="font-semibold text-foreground text-sm mb-3">Income vs Expenses</h3>
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={barData} barGap={4}>
-              <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} stroke="hsl(215,12%,40%)" />
-              <YAxis fontSize={11} tickLine={false} axisLine={false} tickFormatter={v => `$${v / 1000}k`} stroke="hsl(215,12%,40%)" />
-              <Tooltip formatter={(v: number) => formatCurrency(v, currency)} contentStyle={CustomTooltipStyle} />
-              <Bar dataKey="income" fill="hsl(160,84%,39%)" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="expenses" fill="hsl(0,72%,51%)" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="finance-card p-4 sm:p-5 min-w-0 overflow-hidden">
+          <h3 className="font-semibold text-foreground text-sm mb-3">Income vs expenses</h3>
+          <div className="h-[200px] w-full min-w-0 sm:h-[180px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={barData} barGap={4} margin={{ left: -8, right: 4 }}>
+                <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} stroke={axisColor} />
+                <YAxis fontSize={11} tickLine={false} axisLine={false} tickFormatter={v => `${profile.currency}${v >= 1000 ? `${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k` : v}`} stroke={axisColor} width={44} />
+                <Tooltip formatter={(v: number) => formatCurrency(v, currency)} contentStyle={tooltipStyle} />
+                <Bar dataKey="income" fill="hsl(160,84%,39%)" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="expenses" fill="hsl(0,72%,51%)" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
-        <div className="finance-card p-4 lg:col-span-2">
-          <h3 className="font-semibold text-foreground text-sm mb-3">Daily Spending Trend</h3>
+        <div className="finance-card p-4 sm:p-5 lg:col-span-2 min-w-0 overflow-hidden">
+          <h3 className="font-semibold text-foreground text-sm mb-3">Daily spending</h3>
           {lineData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={160}>
-              <LineChart data={lineData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220,12%,14%)" />
-                <XAxis dataKey="date" fontSize={11} tickLine={false} axisLine={false} stroke="hsl(215,12%,40%)" />
-                <YAxis fontSize={11} tickLine={false} axisLine={false} stroke="hsl(215,12%,40%)" />
-                <Tooltip formatter={(v: number) => formatCurrency(v, currency)} contentStyle={CustomTooltipStyle} />
-                <Line type="monotone" dataKey="amount" stroke="hsl(160,84%,39%)" strokeWidth={2.5} dot={{ r: 3, fill: 'hsl(160,84%,39%)', strokeWidth: 0 }} activeDot={{ r: 5, strokeWidth: 0 }} />
-              </LineChart>
-            </ResponsiveContainer>
+            <div className="h-[200px] w-full min-w-0 sm:h-[180px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={lineData} margin={{ left: -8, right: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                  <XAxis dataKey="date" fontSize={11} tickLine={false} axisLine={false} stroke={axisColor} />
+                  <YAxis fontSize={11} tickLine={false} axisLine={false} stroke={axisColor} width={44} />
+                  <Tooltip formatter={(v: number) => formatCurrency(v, currency)} contentStyle={tooltipStyle} />
+                  <Line type="monotone" dataKey="amount" stroke="hsl(160,84%,39%)" strokeWidth={2.5} dot={{ r: 3, fill: 'hsl(160,84%,39%)', strokeWidth: 0 }} activeDot={{ r: 5, strokeWidth: 0 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           ) : (
             <p className="text-muted-foreground text-sm py-8 text-center">No data yet</p>
           )}
@@ -178,7 +247,7 @@ export default function Dashboard() {
       </div>
 
       {/* Smart Insights */}
-      <div className="finance-card p-4">
+      <div className="finance-card p-4 sm:p-5">
         <div className="flex items-center gap-2 mb-3">
           <div className="w-7 h-7 rounded-lg bg-warning/15 flex items-center justify-center">
             <Lightbulb className="w-4 h-4 text-warning" />
@@ -187,16 +256,14 @@ export default function Dashboard() {
         </div>
         <div className="space-y-2">
           {insights.map((insight, i) => (
-            <div key={i} className={`flex items-start gap-2 text-sm p-2.5 rounded-xl ${
-              insight.type === 'success' ? 'bg-primary/8 text-primary' :
+            <div key={i} className={`flex items-start gap-2 text-sm p-2.5 rounded-xl ${insight.type === 'success' ? 'bg-primary/8 text-primary' :
               insight.type === 'warning' ? 'bg-warning/8 text-warning' :
-              'bg-info/8 text-info'
-            }`}>
-              <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${
-                insight.type === 'success' ? 'bg-primary' :
+                'bg-info/8 text-info'
+              }`}>
+              <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${insight.type === 'success' ? 'bg-primary' :
                 insight.type === 'warning' ? 'bg-warning' :
-                'bg-info'
-              }`} />
+                  'bg-info'
+                }`} />
               <span className="leading-relaxed">{insight.text}</span>
             </div>
           ))}
@@ -206,34 +273,61 @@ export default function Dashboard() {
   );
 }
 
-function StatCard({ icon: Icon, label, value, variant, badge, badgePositive }: {
+function StatCard({ icon: Icon, label, value, variant, badge, badgePositive, trend }: {
   icon: React.ElementType; label: string; value: string;
   variant: 'primary' | 'destructive' | 'accent';
-  badge?: string; badgePositive?: boolean;
+  badge?: string; badgePositive?: boolean; trend?: string;
 }) {
   const styles = {
-    primary: { bg: 'bg-primary/10', text: 'text-primary' },
-    destructive: { bg: 'bg-destructive/10', text: 'text-destructive' },
-    accent: { bg: 'bg-accent/10', text: 'text-accent' },
+    primary: {
+      bg: 'bg-primary/10',
+      text: 'text-primary',
+      glow: 'shadow-primary/5',
+      gradient: 'from-primary/10 to-transparent'
+    },
+    destructive: {
+      bg: 'bg-destructive/10',
+      text: 'text-destructive',
+      glow: 'shadow-destructive/5',
+      gradient: 'from-destructive/10 to-transparent'
+    },
+    accent: {
+      bg: 'bg-accent/10',
+      text: 'text-accent',
+      glow: 'shadow-accent/5',
+      gradient: 'from-accent/10 to-transparent'
+    },
   }[variant];
 
   return (
-    <div className="finance-card p-3.5 space-y-2">
-      <div className="flex items-center justify-between">
-        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${styles.bg}`}>
-          <Icon className={`w-4 h-4 ${styles.text}`} />
+    <motion.div
+      whileHover={{ y: -3 }}
+      className="finance-card p-3.5 sm:p-5 space-y-3 sm:space-y-4 group overflow-hidden relative min-h-[128px] sm:min-h-[152px]"
+    >
+      <div className={`absolute top-0 right-0 w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-br ${styles.gradient} blur-2xl opacity-50 -mr-8 -mt-8`} />
+
+      <div className="flex items-center justify-between relative z-10">
+        <div className={cn("w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all duration-300 group-hover:scale-110", styles.bg)}>
+          <Icon className={cn("w-4 h-4 sm:w-6 sm:h-6", styles.text)} />
         </div>
-        {badge && (
-          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${badgePositive ? 'bg-primary/10 text-primary' : 'bg-destructive/10 text-destructive'}`}>
-            {badgePositive ? <ArrowDownRight className="w-3 h-3 inline" /> : <ArrowUpRight className="w-3 h-3 inline" />}
-            {badge}
-          </span>
+        {(badge || trend) && (
+          <div className={cn(
+            "flex items-center gap-1 px-2 py-1 rounded-lg sm:rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-tight",
+            badgePositive !== false ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"
+          )}>
+            {badgePositive !== false ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            {badge || trend}
+          </div>
         )}
       </div>
-      <div>
-        <p className="stat-label">{label}</p>
-        <p className="stat-value text-foreground">{value}</p>
+      <div className="relative z-10">
+        <p className="text-[9px] sm:text-[11px] font-black uppercase tracking-[0.12em] sm:tracking-[0.15em] text-muted-foreground/70 mb-0.5 line-clamp-1">
+          {label}
+        </p>
+        <p className="text-lg sm:text-2xl font-black text-foreground tracking-tight tabular-nums break-words">
+          {value}
+        </p>
       </div>
-    </div>
+    </motion.div>
   );
 }

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="FinWise">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0ea5e9"/>
+      <stop offset="100%" style="stop-color:#06b6d4"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#0b1220"/>
+  <rect x="96" y="160" width="320" height="224" rx="48" fill="url(#g)" opacity="0.95"/>
+  <rect x="144" y="208" width="120" height="96" rx="20" fill="#0b1220" opacity="0.25"/>
+  <circle cx="352" cy="256" r="40" fill="#0b1220" opacity="0.35"/>
+</svg>

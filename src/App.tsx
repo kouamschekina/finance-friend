@@ -4,6 +4,10 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { FinanceProvider } from "@/contexts/FinanceContext";
+import { UIProvider } from "@/contexts/UIContext";
+import { ThemeProvider } from "@/contexts/ThemeContext";
+import { LocaleProvider } from "@/contexts/LocaleContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import Transactions from "./pages/Transactions";
@@ -11,31 +15,43 @@ import Budgets from "./pages/Budgets";
 import Goals from "./pages/Goals";
 import Advisor from "./pages/Advisor";
 import Profile from "./pages/Profile";
+import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
+import { InstallPWA } from "@/components/InstallPWA";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <FinanceProvider>
-        <BrowserRouter>
-          <AppLayout>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/transactions" element={<Transactions />} />
-              <Route path="/budgets" element={<Budgets />} />
-              <Route path="/goals" element={<Goals />} />
-              <Route path="/advisor" element={<Advisor />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </AppLayout>
-        </BrowserRouter>
-      </FinanceProvider>
-    </TooltipProvider>
+    <ThemeProvider>
+      <LocaleProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <AuthProvider>
+            <FinanceProvider>
+              <UIProvider>
+                <InstallPWA />
+                <BrowserRouter>
+                  <AppLayout>
+                    <Routes>
+                      <Route path="/" element={<Dashboard />} />
+                      <Route path="/transactions" element={<Transactions />} />
+                      <Route path="/budgets" element={<Budgets />} />
+                      <Route path="/goals" element={<Goals />} />
+                      <Route path="/advisor" element={<Advisor />} />
+                      <Route path="/reports" element={<Reports />} />
+                      <Route path="/profile" element={<Profile />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </AppLayout>
+                </BrowserRouter>
+              </UIProvider>
+            </FinanceProvider>
+          </AuthProvider>
+        </TooltipProvider>
+      </LocaleProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 

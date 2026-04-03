@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useFinance } from '@/contexts/FinanceContext';
+import { useUI } from '@/contexts/UIContext';
 import { formatCurrency } from '@/lib/finance-store';
 import { getGoalIcon, GOAL_ICON_OPTIONS } from '@/lib/icons';
 import { Plus, Edit2, Trash2, Target } from 'lucide-react';
@@ -9,55 +10,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function Goals() {
-  const { goals, profile, addGoal, updateGoal, deleteGoal } = useFinance();
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [formName, setFormName] = useState('');
-  const [formTarget, setFormTarget] = useState('');
-  const [formCurrent, setFormCurrent] = useState('');
-  const [formDeadline, setFormDeadline] = useState('');
-  const [formIcon, setFormIcon] = useState('target');
-
-  const openNew = () => {
-    setEditingId(null);
-    setFormName(''); setFormTarget(''); setFormCurrent('0'); setFormDeadline(''); setFormIcon('target');
-    setShowForm(true);
-  };
-
-  const openEdit = (id: string) => {
-    const g = goals.find(x => x.id === id);
-    if (!g) return;
-    setEditingId(id);
-    setFormName(g.name); setFormTarget(g.targetAmount.toString()); setFormCurrent(g.currentAmount.toString());
-    setFormDeadline(g.deadline); setFormIcon(g.icon);
-    setShowForm(true);
-  };
-
-  const handleSubmit = () => {
-    if (!formName.trim() || !formTarget) return;
-    const data = {
-      name: formName.trim(), targetAmount: parseFloat(formTarget), currentAmount: parseFloat(formCurrent) || 0,
-      deadline: formDeadline, icon: formIcon,
-    };
-    if (editingId) updateGoal({ ...data, id: editingId });
-    else addGoal(data);
-    setShowForm(false);
-  };
+  const { goals, profile, deleteGoal } = useFinance();
+  const { openGoalDrawer } = useUI();
 
   return (
-    <div className="space-y-5 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div className="hidden lg:block">
-          <h1 className="text-2xl font-bold text-foreground">Savings Goals</h1>
-          <p className="text-muted-foreground text-sm">Track your financial goals</p>
+    <div className="space-y-5 animate-fade-in min-w-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Savings goals</h1>
+          <p className="text-muted-foreground text-sm">Track progress toward targets</p>
         </div>
-        <Button onClick={openNew} size="sm" className="gap-1.5 rounded-xl ml-auto">
-          <Plus className="w-4 h-4" /> New Goal
+        <Button onClick={() => openGoalDrawer()} size="sm" className="gap-1.5 rounded-xl h-11 finance-gradient border-0 px-5 w-full sm:w-auto shrink-0 font-bold shadow-lg shadow-primary/20">
+          <Plus className="w-5 h-5" /> New goal
         </Button>
       </div>
 
       {goals.length === 0 ? (
-        <div className="finance-card p-12 text-center">
+        <div className="finance-card p-12 text-center border-dashed">
           <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
             <Target className="w-8 h-8 text-primary" />
           </div>
@@ -67,8 +36,8 @@ export default function Goals() {
         <div className="space-y-2">
           {goals.map(goal => {
             const GoalIcon = getGoalIcon(goal.icon);
-            const pct = Math.min((goal.currentAmount / goal.targetAmount) * 100, 100);
-            const remaining = goal.targetAmount - goal.currentAmount;
+            const pct = Math.min((goal.current_amount / goal.target_amount) * 100, 100);
+            const remaining = goal.target_amount - goal.current_amount;
             const daysLeft = goal.deadline ? Math.max(0, Math.ceil((new Date(goal.deadline).getTime() - Date.now()) / 86400000)) : null;
             const completed = pct >= 100;
 
@@ -81,25 +50,25 @@ export default function Goals() {
                     </div>
                     <div>
                       <p className="font-semibold text-foreground">{goal.name}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {formatCurrency(goal.currentAmount, profile.currency)} of {formatCurrency(goal.targetAmount, profile.currency)}
+                      <p className="text-[11px] text-muted-foreground font-medium">
+                        {formatCurrency(goal.current_amount, profile.currency)} of {formatCurrency(goal.target_amount, profile.currency)}
                       </p>
                     </div>
                   </div>
                   <div className="flex gap-0.5">
-                    <button onClick={() => openEdit(goal.id)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground active:scale-95"><Edit2 className="w-3.5 h-3.5" /></button>
-                    <button onClick={() => deleteGoal(goal.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive active:scale-95"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => openGoalDrawer(goal.id)} className="p-2 rounded-lg hover:bg-secondary text-muted-foreground active:scale-90 transition-all"><Edit2 className="w-4 h-4" /></button>
+                    <button onClick={() => deleteGoal(goal.id)} className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive active:scale-90 transition-all"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
-                <div className="progress-bar mb-2">
-                  <div className={`progress-bar-fill ${completed ? 'bg-primary' : 'bg-info'}`} style={{ width: `${pct}%` }} />
+                <div className="progress-bar mb-2 h-2.5">
+                  <div className={`progress-bar-fill ${completed ? 'bg-primary shadow-[0_0_8px_rgba(var(--primary-rgb),0.5)]' : 'bg-info'}`} style={{ width: `${pct}%` }} />
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span className="font-medium">{pct.toFixed(0)}% complete</span>
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium">
+                  <span className={completed ? 'text-primary font-bold' : ''}>{pct.toFixed(0)}% complete</span>
                   {completed ? (
-                    <span className="text-primary font-bold">Goal reached!</span>
+                    <span className="text-primary font-bold">Goal reached! 🔥</span>
                   ) : (
-                    <span>{formatCurrency(remaining, profile.currency)} to go{daysLeft !== null && ` · ${daysLeft}d left`}</span>
+                    <span>{formatCurrency(remaining, profile.currency)} to go{daysLeft !== null && ` · ${daysLeft} days`}</span>
                   )}
                 </div>
               </div>
@@ -107,32 +76,6 @@ export default function Goals() {
           })}
         </div>
       )}
-
-      <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="sm:max-w-md rounded-2xl border-border/50">
-          <DialogHeader><DialogTitle>{editingId ? 'Edit Goal' : 'New Savings Goal'}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <Input placeholder="Goal name" value={formName} onChange={e => setFormName(e.target.value)} className="rounded-xl" />
-            <Select value={formIcon} onValueChange={setFormIcon}>
-              <SelectTrigger className="rounded-xl"><SelectValue placeholder="Icon" /></SelectTrigger>
-              <SelectContent>
-                {GOAL_ICON_OPTIONS.map(key => {
-                  const Icon = getGoalIcon(key);
-                  return (
-                    <SelectItem key={key} value={key}>
-                      <div className="flex items-center gap-2"><Icon className="w-4 h-4" /><span className="capitalize">{key}</span></div>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-            <Input type="number" placeholder="Target amount" value={formTarget} onChange={e => setFormTarget(e.target.value)} className="rounded-xl" />
-            <Input type="number" placeholder="Current amount saved" value={formCurrent} onChange={e => setFormCurrent(e.target.value)} className="rounded-xl" />
-            <Input type="date" placeholder="Deadline" value={formDeadline} onChange={e => setFormDeadline(e.target.value)} className="rounded-xl" />
-            <Button onClick={handleSubmit} className="w-full rounded-xl">{editingId ? 'Update' : 'Create Goal'}</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
