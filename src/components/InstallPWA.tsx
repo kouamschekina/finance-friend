@@ -71,10 +71,10 @@ export function InstallPWA() {
             <AnimatePresence>
                 {isVisible && (
                     <motion.div
-                        initial={{ y: 100, opacity: 0 }}
+                        initial={{ y: -100, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
-                        exit={{ y: 100, opacity: 0 }}
-                        className="fixed bottom-24 left-4 right-4 z-50 lg:left-auto lg:right-8 lg:bottom-8 lg:w-96"
+                        exit={{ y: -100, opacity: 0 }}
+                        className="fixed top-4 left-4 right-4 z-[100] lg:left-auto lg:right-8 lg:top-8 lg:w-96"
                     >
                         <div className="glass border border-primary/20 p-5 rounded-[2.5rem] shadow-2xl shadow-primary/20 flex items-center gap-4 relative overflow-hidden group">
                             <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity" />
