@@ -5,12 +5,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useTranslation } from 'react-i18next';
 import {
   User, Settings, CreditCard, Shield, BellRing,
   Smartphone, Upload, LogOut, ChevronRight,
-  Wallet, TrendingUp, Activity, BadgeCheck
+  Wallet, TrendingUp, Activity, BadgeCheck, Palette, Globe
 } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -27,6 +28,15 @@ const CURRENCIES = [
   { code: 'INR', name: 'Indian Rupee', flag: '🇮🇳' },
   { code: 'BRL', name: 'Brazilian Real', flag: '🇧🇷' },
   { code: 'NGN', name: 'Nigerian Naira', flag: '🇳🇬' },
+];
+
+const THEMES = [
+  { id: 'ocean', name: 'Ocean' },
+  { id: 'light', name: 'Paper Light' },
+  { id: 'midnight', name: 'Midnight' },
+  { id: 'slate', name: 'Slate' },
+  { id: 'nature', name: 'Nature' },
+  { id: 'sunrise', name: 'Sunrise' }
 ];
 
 const StatCard = ({ label, value, icon: Icon, colorClass, delay }: any) => (
@@ -68,10 +78,26 @@ const SettingsRow = ({ icon: Icon, label, value, onClick, secondary, colorClass 
 );
 
 export default function Profile() {
+  const { t, i18n } = useTranslation();
   const { profile, updateProfile, transactions } = useFinance();
   const { user, loading: authLoading, signInWithGoogle, signOut } = useAuth();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState('ocean');
+
+  useEffect(() => {
+    setCurrentTheme(document.documentElement.dataset.theme || 'ocean');
+  }, []);
+
+  const handleThemeChange = (v: string) => {
+    setCurrentTheme(v);
+    document.documentElement.dataset.theme = v;
+    localStorage.setItem('theme', v);
+  };
+
+  const handleLangChange = (v: string) => {
+    i18n.changeLanguage(v);
+  };
 
   const authName = (user?.user_metadata?.full_name as string | undefined) ?? '';
   const authAvatarUrl = (user?.user_metadata?.avatar_url as string | undefined) ?? '';
@@ -128,8 +154,8 @@ export default function Profile() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground mb-1">Profile</h1>
-          <p className="text-xs text-muted-foreground font-medium uppercase tracking-[0.2em] opacity-80">Sync & Security</p>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground mb-1">{t('profile.title')}</h1>
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-[0.2em] opacity-80">{t('profile.subtitle')}</p>
         </div>
         <div className="w-10 h-10 rounded-2xl bg-secondary/30 flex items-center justify-center border border-border/50 backdrop-blur-sm">
           <Settings className="w-5 h-5 text-muted-foreground" />
@@ -159,10 +185,10 @@ export default function Profile() {
 
           <div className="space-y-1">
             <h2 className="text-2xl font-bold text-foreground tracking-tight">
-              {displayName || 'Set your name'}
+              {displayName || t('profile.set_name')}
             </h2>
             <p className="text-sm text-muted-foreground font-medium">
-              {user ? user.email : 'Local Account'}
+              {user ? user.email : t('profile.local_account')}
             </p>
           </div>
 
@@ -173,15 +199,15 @@ export default function Profile() {
               className="w-full max-w-sm bg-primary/10 border border-primary/20 p-6 rounded-3xl space-y-4"
             >
               <div className="space-y-1">
-                <p className="text-sm font-bold text-primary">Enable Cloud Sync</p>
-                <p className="text-xs text-muted-foreground">Sign in to sync your finances across all your devices securely.</p>
+                <p className="text-sm font-bold text-primary">{t('profile.enable_cloud')}</p>
+                <p className="text-xs text-muted-foreground">{t('profile.enable_cloud_desc')}</p>
               </div>
               <Button
                 onClick={() => signInWithGoogle()}
                 disabled={authLoading}
                 className="w-full h-12 rounded-2xl finance-gradient border-none shadow-lg shadow-primary/25 hover:scale-[1.02] transition-transform"
               >
-                Continue with Google
+                {t('profile.continue_google')}
               </Button>
             </motion.div>
           )}
@@ -196,7 +222,7 @@ export default function Profile() {
                 className="rounded-xl h-10 px-4"
               >
                 <Upload className="w-4 h-4 mr-2" />
-                {uploading ? 'Uploading…' : 'Change Photo'}
+                {uploading ? t('profile.uploading') : t('profile.change_photo')}
               </Button>
               <Button
                 onClick={() => signOut()}
@@ -205,7 +231,7 @@ export default function Profile() {
                 className="rounded-xl h-10 px-4 text-destructive hover:bg-destructive/10 hover:text-destructive"
               >
                 <LogOut className="w-4 h-4 mr-2" />
-                Sign out
+                {t('profile.sign_out')}
               </Button>
             </div>
           )}
@@ -215,19 +241,19 @@ export default function Profile() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-3 gap-3">
-        <StatCard delay={0.1} label="Activity" value={transactions.length} icon={Activity} colorClass="bg-blue-500/10 text-blue-500" />
-        <StatCard delay={0.2} label="Savings" value={`${savingsRate.toFixed(0)}%`} icon={TrendingUp} colorClass="bg-emerald-500/10 text-emerald-500" />
-        <StatCard delay={0.3} label="Currency" value={profile.currency} icon={Wallet} colorClass="bg-amber-500/10 text-amber-500" />
+        <StatCard delay={0.1} label={t('profile.activity')} value={transactions.length} icon={Activity} colorClass="bg-blue-500/10 text-blue-500" />
+        <StatCard delay={0.2} label={t('profile.savings')} value={`${savingsRate.toFixed(0)}%`} icon={TrendingUp} colorClass="bg-emerald-500/10 text-emerald-500" />
+        <StatCard delay={0.3} label={t('profile.currency')} value={profile.currency} icon={Wallet} colorClass="bg-amber-500/10 text-amber-500" />
       </div>
 
       {/* Settings Sections */}
       <div className="space-y-6 pb-4">
         <div className="space-y-2">
-          <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-[0.2em] pl-1">Configuration</p>
+          <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-[0.2em] pl-1">{t('profile.configuration')}</p>
           <div className="bg-card/50 backdrop-blur-sm border border-border/40 rounded-2xl overflow-hidden divide-y divide-border/20">
             <div className="p-4 space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest pl-1">Display Name</label>
+                <label className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest pl-1">{t('profile.display_name')}</label>
                 <Input
                   value={displayName}
                   onChange={e => updateProfile({ name: e.target.value })}
@@ -236,7 +262,7 @@ export default function Profile() {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest pl-1">Primary Currency</label>
+                <label className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest pl-1">{t('profile.primary_currency')}</label>
                 <Select value={profile.currency} onValueChange={v => updateProfile({ currency: v })}>
                   <SelectTrigger className="h-12 rounded-xl bg-secondary/20 border-border/20">
                     <div className="flex items-center gap-2">
@@ -261,7 +287,7 @@ export default function Profile() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest pl-1">Monthly Target Income</label>
+                <label className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest pl-1">{t('profile.monthly_target')}</label>
                 <Input
                   type="number"
                   value={profile.monthly_income}
@@ -269,23 +295,56 @@ export default function Profile() {
                   className="h-12 rounded-xl bg-secondary/20 border-border/20 transition-all font-bold tabular-nums"
                 />
               </div>
+
+              <div className="space-y-1.5 pt-2 border-t border-border/20">
+                <label className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest pl-1">
+                  <Palette className="w-3.5 h-3.5" />
+                  {t('profile.theme')}
+                </label>
+                <Select value={currentTheme} onValueChange={handleThemeChange}>
+                  <SelectTrigger className="h-12 rounded-xl bg-secondary/20 border-border/20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {THEMES.map(theme => (
+                      <SelectItem key={theme.id} value={theme.id}>{theme.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5 pt-2">
+                <label className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest pl-1">
+                  <Globe className="w-3.5 h-3.5" />
+                  {t('profile.language')}
+                </label>
+                <Select value={i18n.language} onValueChange={handleLangChange}>
+                  <SelectTrigger className="h-12 rounded-xl bg-secondary/20 border-border/20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="fr">Français</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="pt-2">
-                <p className="px-1 text-[9px] text-muted-foreground/60 font-medium text-center">Your data is synced securely with your private cloud profile.</p>
+                <p className="px-1 text-[9px] text-muted-foreground/60 font-medium text-center">{t('profile.sync_desc')}</p>
               </div>
             </div>
           </div>
         </div>
 
         <div className="space-y-2">
-          <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-[0.2em] pl-1">Preferences</p>
+          <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-[0.2em] pl-1">{t('profile.preferences')}</p>
           <div className="border border-border/40 rounded-2xl overflow-hidden shadow-sm">
-            <SettingsRow icon={Shield} label="Privacy Guard" secondary="Enabled" colorClass="bg-emerald-500/10 text-emerald-500" />
-            <SettingsRow icon={BellRing} label="Smart Alerts" secondary="Critical Only" colorClass="bg-amber-500/10 text-amber-500" />
-            <SettingsRow icon={Smartphone} label="Biometric Link" value="FaceID" colorClass="bg-blue-500/10 text-blue-500" />
+            <SettingsRow icon={Shield} label={t('profile.privacy')} secondary={t('profile.enabled')} colorClass="bg-emerald-500/10 text-emerald-500" />
+            <SettingsRow icon={BellRing} label={t('profile.smart_alerts')} secondary={t('profile.critical_only')} colorClass="bg-amber-500/10 text-amber-500" />
+            <SettingsRow icon={Smartphone} label={t('profile.biometric')} value="FaceID" colorClass="bg-blue-500/10 text-blue-500" />
           </div>
         </div>
       </div>
     </div>
   );
 }
-

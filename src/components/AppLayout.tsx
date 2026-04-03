@@ -49,6 +49,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const { t } = useLocale();
   const [isQuickMenuOpen, setIsQuickMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const isHome = location.pathname === '/';
+  const isAdvisor = location.pathname === '/advisor';
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -69,7 +71,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="min-h-[100dvh] flex bg-background text-foreground overflow-x-hidden">
+    <div
+      className={cn(
+        'flex bg-background text-foreground overflow-x-hidden',
+        isAdvisor ? 'h-[100dvh] overflow-y-hidden' : 'min-h-[100dvh]',
+      )}
+    >
       <OnboardingTour />
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex flex-col w-[17.5rem] shrink-0 border-r border-border/50 bg-sidebar/80 backdrop-blur-xl pt-safe">
@@ -141,74 +148,81 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main column */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="sticky top-0 z-40 glass border-b border-border/40 pt-safe">
-          <div className="flex items-center justify-between gap-3 px-4 py-3 lg:px-8 lg:py-4 max-w-6xl mx-auto w-full">
-            <div className="flex items-center gap-3 min-w-0">
-              <button
-                type="button"
-                onClick={() => setIsQuickMenuOpen(true)}
-                className={cn(
-                  'shrink-0 flex h-11 w-11 items-center justify-center rounded-2xl',
-                  'border border-border/50 bg-card/90 shadow-sm',
-                  'active:scale-[0.98] transition-transform',
-                )}
-                aria-label={t('settings.title')}
-                data-tour="quick-menu-mobile"
-              >
-                <Menu className="w-5 h-5 text-foreground" strokeWidth={2.25} />
-              </button>
-              <div className="min-w-0">
-                <h1 className="text-[15px] font-bold tracking-tight text-foreground truncate">
-                  {title}
-                </h1>
-                <p className="text-[11px] text-muted-foreground font-medium truncate">
-                  {profile.currency} · {profile.name || '—'}
-                </p>
+        {isHome && (
+          <header className="sticky top-0 z-40 glass border-b border-border/40 pt-safe">
+            <div className="flex items-center justify-between gap-3 px-4 py-3 lg:px-8 lg:py-4 max-w-6xl mx-auto w-full">
+              <div className="flex items-center gap-3 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setIsQuickMenuOpen(true)}
+                  className={cn(
+                    'shrink-0 flex h-11 w-11 items-center justify-center rounded-2xl',
+                    'border border-border/50 bg-card/90 shadow-sm',
+                    'active:scale-[0.98] transition-transform',
+                  )}
+                  aria-label={t('settings.title')}
+                  data-tour="quick-menu-mobile"
+                >
+                  <Menu className="w-5 h-5 text-foreground" strokeWidth={2.25} />
+                </button>
+                <div className="min-w-0">
+                  <h1 className="text-[15px] font-bold tracking-tight text-foreground truncate">
+                    {title}
+                  </h1>
+                  <p className="text-[11px] text-muted-foreground font-medium truncate">
+                    {profile.currency} · {profile.name || '—'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Notifications */}
+                <button
+                  type="button"
+                  onClick={() => setIsNotificationsOpen(true)}
+                  className={cn(
+                    'shrink-0 flex h-11 w-11 items-center justify-center rounded-2xl relative',
+                    'border border-border/50 bg-card/90 shadow-sm transition-transform active:scale-[0.98]',
+                  )}
+                >
+                  <Bell className="w-5 h-5 text-foreground" strokeWidth={2.25} />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-2.5 right-2.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground border-2 border-background ring-1 ring-primary/20">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Profile avatar (top-right) */}
+                <Link
+                  to="/profile"
+                  aria-label={t('page.profile')}
+                  className={cn(
+                    'shrink-0 flex h-11 w-11 items-center justify-center rounded-2xl overflow-hidden',
+                    'border border-border/50 bg-card/90 shadow-sm transition-transform active:scale-[0.98]',
+                  )}
+                >
+                  {avatar_url ? (
+                    <img src={avatar_url} alt={profile.name || 'User'} className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
+                      <User className="h-5 w-5 text-primary" />
+                    </span>
+                  )}
+                  <span className="sr-only">{avatarInitial}</span>
+                </Link>
               </div>
             </div>
-
-            <div className="flex items-center gap-2">
-              {/* Notifications */}
-              <button
-                type="button"
-                onClick={() => setIsNotificationsOpen(true)}
-                className={cn(
-                  'shrink-0 flex h-11 w-11 items-center justify-center rounded-2xl relative',
-                  'border border-border/50 bg-card/90 shadow-sm transition-transform active:scale-[0.98]',
-                )}
-              >
-                <Bell className="w-5 h-5 text-foreground" strokeWidth={2.25} />
-                {unreadCount > 0 && (
-                  <span className="absolute top-2.5 right-2.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground border-2 border-background ring-1 ring-primary/20">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
-              </button>
-
-              {/* Profile avatar (top-right) */}
-              <Link
-                to="/profile"
-                aria-label={t('page.profile')}
-                className={cn(
-                  'shrink-0 flex h-11 w-11 items-center justify-center rounded-2xl overflow-hidden',
-                  'border border-border/50 bg-card/90 shadow-sm transition-transform active:scale-[0.98]',
-                )}
-              >
-                {avatar_url ? (
-                  <img src={avatar_url} alt={profile.name || 'User'} className="h-full w-full object-cover" />
-                ) : (
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
-                    <User className="h-5 w-5 text-primary" />
-                  </span>
-                )}
-                <span className="sr-only">{avatarInitial}</span>
-              </Link>
-            </div>
-          </div>
-        </header>
+          </header>
+        )}
 
         <main className="flex-1 flex flex-col min-h-0">
-          <div className="flex-1 pb-28 lg:pb-10">
+          <div
+            className={cn(
+              'flex-1 lg:pb-10',
+              isAdvisor ? 'pb-0 overflow-hidden flex flex-col min-h-0' : 'pb-28',
+            )}
+          >
             <AnimatePresence mode="wait">
               <motion.div
                 key={location.pathname}
@@ -216,7 +230,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                className="max-w-6xl mx-auto w-full px-4 py-5 sm:px-5 lg:px-8 lg:py-8"
+                className={cn(
+                  'max-w-6xl mx-auto w-full',
+                  isAdvisor
+                    ? 'px-4 pt-4 pb-0 sm:px-5 lg:px-8 h-full min-h-0 flex flex-col overflow-hidden'
+                    : 'px-4 py-5 sm:px-5 lg:px-8 lg:py-8',
+                )}
               >
                 {children}
               </motion.div>

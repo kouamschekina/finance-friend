@@ -234,6 +234,8 @@ function ThemeSwatch({ id }: { id: ThemeId }) {
     light: 'linear-gradient(135deg,#f8fafc,#e2e8f0)',
     midnight: 'linear-gradient(135deg,#000000,#0a1628)',
     slate: 'linear-gradient(135deg,#12121a,#1e1632)',
+    nature: 'linear-gradient(135deg,#0d1a0f,#1a3d1e)',
+    sunrise: 'linear-gradient(135deg,#1a0d05,#3d1a0a)',
   };
   return (
     <span

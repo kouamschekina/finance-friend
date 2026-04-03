@@ -1,4 +1,4 @@
-export const LOCALE_CODES = ['en', 'es', 'fr', 'de'] as const;
+export const LOCALE_CODES = ['en', 'fr'] as const;
 export type LocaleCode = (typeof LOCALE_CODES)[number];
 
 export const DEFAULT_LOCALE: LocaleCode = 'en';
@@ -11,13 +11,11 @@ export function isLocaleCode(value: string): value is LocaleCode {
 
 export const LOCALE_LABELS: Record<LocaleCode, string> = {
   en: 'English',
-  es: 'Español',
   fr: 'Français',
-  de: 'Deutsch',
 };
 
 /** Flat message keys used across the shell */
-type MessageKey =
+export type MessageKey =
   | 'nav.home'
   | 'nav.transactions'
   | 'nav.budgets'
@@ -44,6 +42,34 @@ type MessageKey =
   | 'transaction.income'
   | 'transaction.category'
   | 'transaction.save'
+  | 'transaction.linkGoal'
+  | 'transaction.notePlaceholder'
+  | 'transaction.payment'
+  | 'transaction.none'
+  | 'category.editBudget'
+  | 'category.setBudget'
+  | 'category.accountability'
+  | 'category.selectCategory'
+  | 'category.hint'
+  | 'category.saveBudget'
+  | 'goal.editTitle'
+  | 'goal.createTitle'
+  | 'goal.wealth'
+  | 'goal.identity'
+  | 'goal.namePlaceholder'
+  | 'goal.targetDate'
+  | 'goal.pickDeadline'
+  | 'goal.saveChanges'
+  | 'goal.launch'
+  | 'goal.deleteConfirm'
+  | 'notifications.title'
+  | 'notifications.markAllRead'
+  | 'notifications.markAsRead'
+  | 'notifications.allCaughtUp'
+  | 'notifications.allCaughtUpDesc'
+  | 'notifications.viewDetails'
+  | 'menu.title'
+  | 'menu.exportPdf'
   | 'landing.welcome'
   | 'landing.signin'
   | 'landing.google'
@@ -77,49 +103,45 @@ const catalog: Record<LocaleCode, Record<MessageKey, string>> = {
     'transaction.income': 'Income',
     'transaction.category': 'Category',
     'transaction.save': 'Save',
+    'transaction.linkGoal': 'Link to Savings Goal',
+    'transaction.notePlaceholder': 'Note (optional)',
+    'transaction.payment': 'Payment',
+    'transaction.none': 'None',
+    'category.editBudget': 'Edit Budget',
+    'category.setBudget': 'Set Budget Limit',
+    'category.accountability': 'Accountability Flow',
+    'category.selectCategory': 'Select Category',
+    'category.hint': 'Select a category above and enter your monthly spending limit using the keypad.',
+    'category.saveBudget': 'Save Budget Limit',
+    'goal.editTitle': 'Edit Goal',
+    'goal.createTitle': 'Create New Goal',
+    'goal.wealth': 'Wealth Generator',
+    'goal.identity': 'Goal Identity',
+    'goal.namePlaceholder': 'e.g. New Car, Dream Wedding',
+    'goal.targetDate': 'Target Date (Optional)',
+    'goal.pickDeadline': 'Pick a deadline',
+    'goal.saveChanges': 'Save Goal Changes',
+    'goal.launch': 'Launch New Goal',
+    'goal.deleteConfirm': 'Are you sure you want to delete this savings goal?',
+    'notifications.title': 'Notifications',
+    'notifications.markAllRead': 'Mark all as read',
+    'notifications.markAsRead': 'Mark as read',
+    'notifications.allCaughtUp': 'All caught up!',
+    'notifications.allCaughtUpDesc': "When something important happens with your finances, we'll let you know.",
+    'notifications.viewDetails': 'View details',
+    'menu.title': 'Menu',
+    'menu.exportPdf': 'Export PDF',
     'landing.welcome': 'Welcome to FinWise',
     'landing.signin': 'Please sign in to continue',
     'landing.google': 'Sign in with Google',
     'landing.later': 'Continue Later',
-  },
-  es: {
-    'nav.home': 'Inicio',
-    'nav.transactions': 'Movimientos',
-    'nav.budgets': 'Presupuestos',
-    'nav.goals': 'Metas',
-    'page.dashboard': 'Resumen',
-    'page.transactions': 'Movimientos',
-    'page.budgets': 'Presupuestos',
-    'page.goals': 'Metas',
-    'page.profile': 'Perfil',
-    'page.advisor': 'Asesor',
-    'page.reports': 'Informes',
-    'settings.title': 'Ajustes',
-    'settings.appearance': 'Apariencia',
-    'settings.language': 'Idioma',
-    'settings.account': 'Cuenta',
-    'settings.advisor': 'Asesor IA',
-    'settings.groqKey': 'Clave API de Groq',
-    'settings.save': 'Guardar',
-    'settings.openChat': 'Abrir chat',
-    'settings.personalInfo': 'Información personal',
-    'transaction.new': 'Nuevo',
-    'transaction.edit': 'Editar',
-    'transaction.expense': 'Gasto',
-    'transaction.income': 'Ingreso',
-    'transaction.category': 'Categoría',
-    'transaction.save': 'Guardar',
-    'landing.welcome': 'Bienvenido a FinWise',
-    'landing.signin': 'Inicia sesión para continuar',
-    'landing.google': 'Continuar con Google',
-    'landing.later': 'Continuar más tarde',
   },
   fr: {
     'nav.home': 'Accueil',
     'nav.transactions': 'Activité',
     'nav.budgets': 'Budgets',
     'nav.goals': 'Objectifs',
-    'page.dashboard': 'Vue d’ensemble',
+    'page.dashboard': 'Vue d\'ensemble',
     'page.transactions': 'Transactions',
     'page.budgets': 'Budgets',
     'page.goals': 'Objectifs',
@@ -141,42 +163,38 @@ const catalog: Record<LocaleCode, Record<MessageKey, string>> = {
     'transaction.income': 'Revenu',
     'transaction.category': 'Catégorie',
     'transaction.save': 'Enregistrer',
+    'transaction.linkGoal': 'Lier à un Objectif d\'Épargne',
+    'transaction.notePlaceholder': 'Note (optionnel)',
+    'transaction.payment': 'Paiement',
+    'transaction.none': 'Aucun',
+    'category.editBudget': 'Modifier le Budget',
+    'category.setBudget': 'Définir la Limite',
+    'category.accountability': 'Flux de Responsabilité',
+    'category.selectCategory': 'Sélectionner une Catégorie',
+    'category.hint': 'Sélectionnez une catégorie ci-dessus et entrez votre limite mensuelle via le clavier.',
+    'category.saveBudget': 'Enregistrer la Limite',
+    'goal.editTitle': 'Modifier l\'Objectif',
+    'goal.createTitle': 'Créer un Objectif',
+    'goal.wealth': 'Générateur de Richesse',
+    'goal.identity': 'Identité de l\'Objectif',
+    'goal.namePlaceholder': 'ex. Nouvelle Voiture, Mariage de Rêve',
+    'goal.targetDate': 'Date Cible (Optionnel)',
+    'goal.pickDeadline': 'Choisir une échéance',
+    'goal.saveChanges': 'Enregistrer les Modifications',
+    'goal.launch': 'Lancer le Nouvel Objectif',
+    'goal.deleteConfirm': 'Êtes-vous sûr de vouloir supprimer cet objectif d\'épargne ?',
+    'notifications.title': 'Notifications',
+    'notifications.markAllRead': 'Tout marquer comme lu',
+    'notifications.markAsRead': 'Marquer comme lu',
+    'notifications.allCaughtUp': 'Tout est à jour !',
+    'notifications.allCaughtUpDesc': 'Quand quelque chose d\'important arrive avec vos finances, nous vous le ferons savoir.',
+    'notifications.viewDetails': 'Voir les détails',
+    'menu.title': 'Menu',
+    'menu.exportPdf': 'Exporter PDF',
     'landing.welcome': 'Bienvenue sur FinWise',
     'landing.signin': 'Veuillez vous connecter pour continuer',
     'landing.google': 'Continuer avec Google',
     'landing.later': 'Continuer plus tard',
-  },
-  de: {
-    'nav.home': 'Start',
-    'nav.transactions': 'Aktivität',
-    'nav.budgets': 'Budgets',
-    'nav.goals': 'Ziele',
-    'page.dashboard': 'Überblick',
-    'page.transactions': 'Buchungen',
-    'page.budgets': 'Budgets',
-    'page.goals': 'Ziele',
-    'page.profile': 'Profil',
-    'page.advisor': 'Berater',
-    'page.reports': 'Berichte',
-    'settings.title': 'Einstellungen',
-    'settings.appearance': 'Erscheinungsbild',
-    'settings.language': 'Sprache',
-    'settings.account': 'Konto',
-    'settings.advisor': 'KI-Berater',
-    'settings.groqKey': 'Groq-API-Schlüssel',
-    'settings.save': 'Speichern',
-    'settings.openChat': 'Chat öffnen',
-    'settings.personalInfo': 'Persönliche Daten',
-    'transaction.new': 'Neuer Eintrag',
-    'transaction.edit': 'Bearbeiten',
-    'transaction.expense': 'Ausgabe',
-    'transaction.income': 'Einnahme',
-    'transaction.category': 'Kategorie',
-    'transaction.save': 'Speichern',
-    'landing.welcome': 'Willkommen bei FinWise',
-    'landing.signin': 'Bitte melden Sie sich an, um fortzufahren',
-    'landing.google': 'Mit Google anmelden',
-    'landing.later': 'Später fortfahren',
   },
 };
 

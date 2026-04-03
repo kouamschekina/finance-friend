@@ -3,17 +3,17 @@ import { LayoutDashboard, ArrowLeftRight, Wallet, Target, Brain } from 'lucide-r
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useUI } from '@/contexts/UIContext';
-import { useLocale } from '@/contexts/LocaleContext';
+import { useTranslation } from 'react-i18next';
 
 export function BottomNav() {
   const location = useLocation();
   const { openTransactionDrawer } = useUI();
-  const { t } = useLocale();
+  const { t } = useTranslation();
 
   const navItems = [
-    { path: '/', label: t('nav.home'), icon: LayoutDashboard },
+    { path: '/', label: t('nav.dashboard'), icon: LayoutDashboard },
     { path: '/transactions', label: t('nav.transactions'), icon: ArrowLeftRight, dataTour: 'nav-activity-mobile' },
-    { path: '/advisor', label: t('page.advisor'), icon: Brain },
+    { path: '/advisor', label: t('nav.advisor'), icon: Brain },
     { path: '/budgets', label: t('nav.budgets'), icon: Wallet, dataTour: 'nav-budgets-mobile' },
     { path: '/goals', label: t('nav.goals'), icon: Target, dataTour: 'nav-goals-mobile' },
   ];

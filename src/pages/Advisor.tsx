@@ -1,27 +1,29 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useFinance } from '@/contexts/FinanceContext';
 import { getCurrentMonthTransactions, getPreviousMonthTransactions, formatCurrency, getCategorySpending } from '@/lib/finance-store';
-import { Brain, Send, TrendingDown, PiggyBank, RotateCcw, Bot, User, Stars, ArrowUpRight } from 'lucide-react';
+import { Brain, Send, TrendingDown, PiggyBank, RotateCcw, Bot, User, Stars } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 type Msg = { role: 'user' | 'assistant'; content: string };
 
-const QUICK_PROMPTS = [
-  { icon: TrendingDown, label: 'Spending patterns', prompt: 'Analyze my spending patterns. Where am I spending too much and how can I cut back?' },
-  { icon: PiggyBank, label: 'Savings plan', prompt: 'Based on my income and expenses, give me a concrete plan to increase my savings rate.' },
-  { icon: Stars, label: 'Health assessment', prompt: 'Give me a comprehensive financial health assessment based on my current data.' },
-];
-
 export default function Advisor() {
   const { transactions, categories, profile, goals } = useFinance();
+  const { t } = useTranslation();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const QUICK_PROMPTS = [
+    { icon: TrendingDown, label: t('advisor.prompt_spending'), prompt: t('advisor.prompt_spending_text') },
+    { icon: PiggyBank, label: t('advisor.prompt_savings'), prompt: t('advisor.prompt_savings_text') },
+    { icon: Stars, label: t('advisor.prompt_health'), prompt: t('advisor.prompt_health_text') },
+  ];
 
   // Build financial context for AI
   const financialContext = useMemo(() => {
@@ -60,9 +62,9 @@ Categories: ${categoryBreakdown || 'None'} | Goals: ${goalsInfo || 'None'}`;
   const sendMessage = async (text: string) => {
     if (!text.trim() || isLoading) return;
 
-    const groqKey = import.meta.env.VITE_GROQ_API_KEY;
+    const groqKey = import.meta.env.VITE_GROQ_API_KEY || localStorage.getItem('GROQ_API_KEY');
     if (!groqKey) {
-      toast.error('AI Advisor is currently unavailable (Missing API Key).');
+      toast.error(t('advisor.unavailable'));
       return;
     }
 
@@ -70,6 +72,10 @@ Categories: ${categoryBreakdown || 'None'} | Goals: ${goalsInfo || 'None'}`;
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setIsLoading(true);
+    // Reset textarea height
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
 
     try {
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -102,11 +108,11 @@ Categories: ${categoryBreakdown || 'None'} | Goals: ${goalsInfo || 'None'}`;
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || 'Advisor service failed.');
+        throw new Error((errorData as any).error?.message || 'Advisor service failed.');
       }
 
       const data = await response.json();
-      const aiContent = data.choices[0]?.message?.content || 'I encountered an error processing your data.';
+      const aiContent = (data as any).choices[0]?.message?.content || 'I encountered an error processing your data.';
 
       setMessages(prev => [...prev, { role: 'assistant', content: aiContent }]);
     } catch (e) {
@@ -124,19 +130,27 @@ Categories: ${categoryBreakdown || 'None'} | Goals: ${goalsInfo || 'None'}`;
     }
   };
 
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    // Auto-resize textarea
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+  };
+
   return (
-    <div className="flex flex-col max-w-4xl mx-auto overflow-hidden min-h-[min(640px,calc(100dvh-9rem))] h-[calc(100dvh-9rem)] sm:h-[calc(100dvh-8rem)]">
-      {/* Header Info */}
-      <div className="flex items-center justify-between mb-6 px-1">
+    <div className="flex flex-col h-full min-h-0 overflow-hidden max-w-3xl mx-auto">
+
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4 shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl finance-gradient flex items-center justify-center shadow-lg shadow-primary/20">
             <Brain className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-black tracking-tight text-foreground leading-none mb-1">AI Advisor</h1>
+            <h1 className="text-xl font-black tracking-tight text-foreground leading-none mb-1">{t('advisor.title')}</h1>
             <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest leading-none flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-              Strategy Assistant
+              {t('advisor.subtitle')}
             </p>
           </div>
         </div>
@@ -147,19 +161,19 @@ Categories: ${categoryBreakdown || 'None'} | Goals: ${goalsInfo || 'None'}`;
             onClick={() => setMessages([])}
             className="rounded-xl h-9 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-destructive hover:bg-destructive/10"
           >
-            <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Reset
+            <RotateCcw className="w-3.5 h-3.5 mr-1.5" />{t('advisor.reset')}
           </Button>
         )}
       </div>
 
-      {/* Chat messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-6 pb-6 px-1 no-scrollbar scroll-smooth">
+      {/* Chat area — scrollable */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto no-scrollbar min-h-0 overscroll-contain">
         <AnimatePresence initial={false}>
           {messages.length === 0 ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="flex flex-col items-center justify-center h-full gap-8 py-10"
+              className="flex flex-col items-center justify-center h-full gap-6 py-6"
             >
               <div className="relative">
                 <div className="w-20 h-20 rounded-3xl bg-secondary/30 flex items-center justify-center relative z-10 border border-border/50">
@@ -172,111 +186,112 @@ Categories: ${categoryBreakdown || 'None'} | Goals: ${goalsInfo || 'None'}`;
                 />
               </div>
 
-              <div className="text-center space-y-2">
-                <h2 className="text-2xl font-black text-foreground tracking-tight">How can I help today?</h2>
+              <div className="text-center space-y-2 px-4">
+                <h2 className="text-2xl font-black text-foreground tracking-tight">{t('advisor.how_can_i_help')}</h2>
                 <p className="text-sm text-muted-foreground font-medium max-w-[280px] mx-auto">
-                  I have analyzed your <span className="text-primary font-bold">{transactions.length}</span> latest records. Ask me for a specific insight.
+                  {t('advisor.analyzed_records', { count: transactions.length })}
                 </p>
               </div>
 
-              <div className="w-full max-w-sm space-y-3">
+              <div className="w-full max-w-sm space-y-2.5 px-2">
                 {QUICK_PROMPTS.map((qp, i) => (
                   <motion.button
                     key={i}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => sendMessage(qp.prompt)}
-                    className="w-full p-4 rounded-2xl bg-secondary/30 border border-border/20 text-left hover:bg-secondary/50 hover:border-primary/20 transition-all group flex items-center gap-4"
+                    className="w-full p-3.5 rounded-2xl bg-secondary/30 border border-border/20 text-left hover:bg-secondary/50 hover:border-primary/20 transition-all group flex items-center gap-3"
                   >
-                    <div className="w-10 h-10 rounded-xl bg-background flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm">
-                      <qp.icon className="w-5 h-5 text-primary" />
+                    <div className="w-9 h-9 rounded-xl bg-background flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm shrink-0">
+                      <qp.icon className="w-4 h-4 text-primary" />
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-foreground leading-tight">{qp.label}</p>
-                      <p className="text-[10px] text-muted-foreground font-medium truncate">Strategic assessment</p>
+                      <p className="text-[10px] text-muted-foreground font-medium truncate">{t('advisor.strategic_assessment')}</p>
                     </div>
-                    <ArrowUpRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
                   </motion.button>
                 ))}
               </div>
             </motion.div>
           ) : (
-            messages.map((msg, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 10, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                layout
-                className={cn(
-                  "flex items-start gap-3 px-2",
-                  msg.role === 'user' ? "flex-row-reverse" : "flex-row"
-                )}
-              >
-                <div className={cn(
-                  "w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-1 shadow-sm border",
-                  msg.role === 'user' ? "bg-secondary text-foreground border-border/50" : "finance-gradient text-white border-transparent"
-                )}>
-                  {msg.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
-                </div>
+            <div className="space-y-5 pb-4 px-1">
+              {messages.map((msg, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  layout
+                  className={cn(
+                    "flex items-start gap-3",
+                    msg.role === 'user' ? "flex-row-reverse" : "flex-row"
+                  )}
+                >
+                  <div className={cn(
+                    "w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-1 shadow-sm border",
+                    msg.role === 'user' ? "bg-secondary text-foreground border-border/50" : "finance-gradient text-white border-transparent"
+                  )}>
+                    {msg.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                  </div>
 
-                <div className={cn(
-                  "max-w-[82%] px-4 py-3.5 rounded-2xl text-sm leading-relaxed",
-                  msg.role === 'user'
-                    ? "bg-primary text-white font-medium rounded-tr-sm shadow-md shadow-primary/10"
-                    : "bg-secondary/40 backdrop-blur-sm border border-border/30 text-foreground font-medium rounded-tl-sm"
-                )}>
-                  <div className="whitespace-pre-wrap">{msg.content}</div>
-                </div>
-              </motion.div>
-            ))
-          )}
+                  <div className={cn(
+                    "max-w-[82%] px-4 py-3 rounded-2xl text-sm leading-relaxed",
+                    msg.role === 'user'
+                      ? "bg-primary text-white font-medium rounded-tr-sm shadow-md shadow-primary/10"
+                      : "bg-secondary/40 backdrop-blur-sm border border-border/30 text-foreground font-medium rounded-tl-sm"
+                  )}>
+                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                  </div>
+                </motion.div>
+              ))}
 
-          {isLoading && (
-            <motion.div
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-start gap-3 px-4"
-            >
-              <div className="w-8 h-8 rounded-xl finance-gradient flex items-center justify-center text-white">
-                <Bot className="w-4 h-4" />
-              </div>
-              <div className="bg-secondary/40 border border-border/30 px-4 py-3.5 rounded-2xl rounded-tl-sm flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-pulse" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-pulse" style={{ animationDelay: '200ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-pulse" style={{ animationDelay: '400ms' }} />
-              </div>
-            </motion.div>
+              {isLoading && (
+                <motion.div
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-start gap-3"
+                >
+                  <div className="w-8 h-8 rounded-xl finance-gradient flex items-center justify-center text-white">
+                    <Bot className="w-4 h-4" />
+                  </div>
+                  <div className="bg-secondary/40 border border-border/30 px-4 py-3.5 rounded-2xl rounded-tl-sm flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-pulse" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-pulse" style={{ animationDelay: '200ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-pulse" style={{ animationDelay: '400ms' }} />
+                  </div>
+                </motion.div>
+              )}
+            </div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* Input section */}
-      <div className="px-1 py-4">
+      {/* Input — pinned to bottom */}
+      <div className="shrink-0 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+4.5rem)]">
         <div className="relative group">
           <textarea
-            ref={inputRef}
+            ref={textareaRef}
             rows={1}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder="Describe your goal or ask a question..."
-            className="w-full bg-secondary/50 backdrop-blur-md border border-border/40 rounded-2xl pl-5 pr-14 py-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all resize-none shadow-lg no-scrollbar"
+            placeholder={t('advisor.input_placeholder')}
+            className="w-full bg-secondary/50 backdrop-blur-md border border-border/40 rounded-2xl pl-5 pr-14 py-3.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30 transition-all resize-none shadow-lg no-scrollbar"
+            style={{ minHeight: '52px', maxHeight: '120px' }}
           />
-          <div className="absolute right-2 top-1/2 -translate-y-1/2">
+          <div className="absolute right-2 top-2">
             <Button
               onClick={() => sendMessage(input)}
               disabled={!input.trim() || isLoading}
-              className="w-10 h-10 rounded-xl finance-gradient border-0 shadow-lg shadow-primary/20 transition-all active:scale-90"
+              className="w-9 h-9 rounded-xl finance-gradient border-0 shadow-lg shadow-primary/20 transition-all active:scale-90"
               size="icon"
             >
               <Send className="w-4 h-4" />
             </Button>
           </div>
         </div>
-        <p className="text-[10px] text-center text-muted-foreground/50 mt-3 font-bold uppercase tracking-widest">
-          AI can occasionally provide inaccurate financial data. Cross-check your records.
+        <p className="text-[10px] text-center text-muted-foreground/50 mt-2 font-bold uppercase tracking-widest">
+          {t('advisor.disclaimer')}
         </p>
       </div>
     </div>
   );
 }
-

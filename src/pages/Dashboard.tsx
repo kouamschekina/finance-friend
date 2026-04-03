@@ -11,6 +11,7 @@ import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { subDays, parseISO, differenceInDays, format } from 'date-fns';
+import { useTranslation } from 'react-i18next';
 
 const CHART_COLORS = ['hsl(160,84%,39%)', 'hsl(210,90%,56%)', 'hsl(38,92%,50%)', 'hsl(340,82%,52%)', 'hsl(280,70%,55%)', 'hsl(25,95%,53%)', 'hsl(0,72%,51%)', 'hsl(220,60%,50%)'];
 
@@ -37,6 +38,7 @@ function chartTooltipStyle(light: boolean) {
 export default function Dashboard() {
   const { transactions, categories, profile, dateRange } = useFinance();
   const { theme } = useTheme();
+  const { t } = useTranslation();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const tooltipStyle = chartTooltipStyle(theme === 'light');
   const axisColor = theme === 'light' ? 'hsl(220 12% 40%)' : 'hsl(215 15% 55%)';
@@ -146,9 +148,9 @@ export default function Dashboard() {
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl lg:text-4xl">
-            Overview
+            {t('dashboard.title')}
           </h1>
-          <p className="text-muted-foreground text-sm font-medium">Analyze your finances by date</p>
+          <p className="text-muted-foreground text-sm font-medium">{t('dashboard.subtitle')}</p>
         </div>
         <div data-tour="date-picker">
           <DateRangePicker />
@@ -158,7 +160,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-4">
         <StatCard
           icon={DollarSign}
-          label="Total Income"
+          label={t('dashboard.income')}
           value={formatCurrency(totalIncome, currency)}
           variant="primary"
           badge={`${incomeChange > 0 ? '+' : ''}${incomeChange.toFixed(0)}%`}
@@ -166,7 +168,7 @@ export default function Dashboard() {
         />
         <StatCard
           icon={TrendingDown}
-          label="Monthly Expenses"
+          label={t('dashboard.expenses')}
           value={formatCurrency(totalExpenses, currency)}
           variant="destructive"
           badge={`${expenseChange > 0 ? '+' : ''}${expenseChange.toFixed(0)}%`}
@@ -174,7 +176,7 @@ export default function Dashboard() {
         />
         <StatCard
           icon={TrendingUp}
-          label="Available Balance"
+          label={t('dashboard.balance')}
           value={formatCurrency(netBalance, currency)}
           variant={netBalance >= 0 ? 'primary' : 'destructive'}
           badge={`${balanceChange > 0 ? '+' : ''}${balanceChange.toFixed(0)}%`}
@@ -182,7 +184,7 @@ export default function Dashboard() {
         />
         <StatCard
           icon={PiggyBank}
-          label="Savings Strategy"
+          label={t('profile.savings')}
           value={`${savingsRate.toFixed(0)}%`}
           variant="accent"
           badge={`${savingsChange > 0 ? '+' : ''}${savingsChange.toFixed(0)}%`}

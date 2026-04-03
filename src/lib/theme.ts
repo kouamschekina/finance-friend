@@ -1,4 +1,4 @@
-export const THEME_IDS = ['ocean', 'light', 'midnight', 'slate'] as const;
+export const THEME_IDS = ['ocean', 'light', 'midnight', 'slate', 'nature', 'sunrise'] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
 
 export const DEFAULT_THEME: ThemeId = 'ocean';
@@ -16,6 +16,8 @@ export function getThemeMetaColor(theme: ThemeId): string {
     light: '#f4f6f8',
     midnight: '#000000',
     slate: '#0f0f12',
+    nature: '#0d1a0f',
+    sunrise: '#1a0d05',
   };
   return map[theme];
 }
@@ -25,4 +27,6 @@ export const THEME_LABELS: Record<ThemeId, string> = {
   light: 'Paper',
   midnight: 'Midnight',
   slate: 'Slate',
+  nature: 'Nature',
+  sunrise: 'Sunrise',
 };
