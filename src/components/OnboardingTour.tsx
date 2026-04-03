@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, ChevronLeft, X, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+const ONBOARDING_TOUR_STORAGE_KEY = 'finwise-onboarding-tour-dismissed-v1';
+
 const Tooltip = ({
     index,
     step,
@@ -91,9 +93,24 @@ export const OnboardingTour: React.FC = () => {
     }, []);
 
     useEffect(() => {
+        const dismissed = (() => {
+            try {
+                return localStorage.getItem(ONBOARDING_TOUR_STORAGE_KEY) === '1';
+            } catch (e) {
+                return false;
+            }
+        })();
+
+        if (dismissed) return;
+
         if (profile && profile.onboarding_completed !== true) {
             const timer = setTimeout(() => {
                 console.log('FinWise: Starting Onboarding Tour');
+                try {
+                    localStorage.setItem(ONBOARDING_TOUR_STORAGE_KEY, '1');
+                } catch (e) {
+                    // ignore
+                }
                 setRun(true);
             }, 2000);
             return () => clearTimeout(timer);
@@ -170,6 +187,11 @@ export const OnboardingTour: React.FC = () => {
         const { status } = data;
         if (([STATUS.FINISHED, STATUS.SKIPPED] as string[]).includes(status)) {
             setRun(false);
+            try {
+                localStorage.setItem(ONBOARDING_TOUR_STORAGE_KEY, '1');
+            } catch (e) {
+                // ignore
+            }
             completeOnboarding();
         }
     };
