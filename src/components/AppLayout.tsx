@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFinance } from '@/contexts/FinanceContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useUI } from '@/contexts/UIContext';
 import { useLocale } from '@/contexts/LocaleContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -26,6 +27,7 @@ import { TransactionDrawer } from './TransactionDrawer';
 import { CategoryDrawer } from './CategoryDrawer';
 import { GoalDrawer } from './GoalDrawer';
 import { SettingsDrawer } from './SettingsDrawer';
+import { OnboardingTour } from './OnboardingTour';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 
@@ -50,19 +52,25 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
+  const { user } = useAuth();
+
   const titleKey = pathToTitleKey[location.pathname as keyof typeof pathToTitleKey];
   const title = titleKey ? t(titleKey) : 'FinWise';
-  const avatarInitial = (profile.name || 'U').trim().slice(0, 1).toUpperCase();
+
+  const authAvatarUrl = (user?.user_metadata?.avatar_url as string | undefined) ?? '';
+  const avatar_url = authAvatarUrl || profile.avatar_url || '';
+  const avatarInitial = (profile.name || user?.email || 'U').trim().slice(0, 1).toUpperCase();
 
   const navItems = [
-    { path: '/', label: t('nav.home'), icon: LayoutDashboard },
-    { path: '/transactions', label: t('nav.transactions'), icon: ArrowLeftRight },
-    { path: '/budgets', label: t('nav.budgets'), icon: Wallet },
-    { path: '/goals', label: t('nav.goals'), icon: Target },
+    { path: '/', label: t('nav.home'), icon: LayoutDashboard, dataTour: 'nav-home-desktop' },
+    { path: '/transactions', label: t('nav.transactions'), icon: ArrowLeftRight, dataTour: 'nav-activity-desktop' },
+    { path: '/budgets', label: t('nav.budgets'), icon: Wallet, dataTour: 'nav-budgets-desktop' },
+    { path: '/goals', label: t('nav.goals'), icon: Target, dataTour: 'nav-goals-desktop' },
   ];
 
   return (
     <div className="min-h-[100dvh] flex bg-background text-foreground overflow-x-hidden">
+      <OnboardingTour />
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex flex-col w-[17.5rem] shrink-0 border-r border-border/50 bg-sidebar/80 backdrop-blur-xl pt-safe">
         <div className="flex flex-col gap-1 p-5 pb-4 border-b border-border/40">
@@ -92,6 +100,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:bg-secondary/80 hover:text-foreground',
                 )}
+                data-tour={(item as any).dataTour}
               >
                 <item.icon className={cn('w-[18px] h-[18px] shrink-0')} strokeWidth={2.2} />
                 <span className="flex-1 truncate">{item.label}</span>
@@ -114,6 +123,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               'w-full flex items-center gap-3 px-3 py-3 rounded-xl border border-border/50',
               'bg-secondary/40 hover:bg-secondary/70 text-foreground transition-colors text-left',
             )}
+            data-tour="advisor-link-desktop"
           >
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-background/80 border border-border/40">
               <Settings2 className="w-5 h-5 text-muted-foreground" strokeWidth={2} />
@@ -143,6 +153,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   'active:scale-[0.98] transition-transform',
                 )}
                 aria-label={t('settings.title')}
+                data-tour="quick-menu-mobile"
               >
                 <Menu className="w-5 h-5 text-foreground" strokeWidth={2.25} />
               </button>
@@ -179,13 +190,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 to="/profile"
                 aria-label={t('page.profile')}
                 className={cn(
-                  'shrink-0 flex h-11 w-11 items-center justify-center rounded-2xl',
+                  'shrink-0 flex h-11 w-11 items-center justify-center rounded-2xl overflow-hidden',
                   'border border-border/50 bg-card/90 shadow-sm transition-transform active:scale-[0.98]',
                 )}
               >
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
-                  <User className="h-5 w-5 text-primary" />
-                </span>
+                {avatar_url ? (
+                  <img src={avatar_url} alt={profile.name || 'User'} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
+                    <User className="h-5 w-5 text-primary" />
+                  </span>
+                )}
                 <span className="sr-only">{avatarInitial}</span>
               </Link>
             </div>

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useFinance } from '@/contexts/FinanceContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
@@ -37,6 +37,7 @@ function chartTooltipStyle(light: boolean) {
 export default function Dashboard() {
   const { transactions, categories, profile, dateRange } = useFinance();
   const { theme } = useTheme();
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const tooltipStyle = chartTooltipStyle(theme === 'light');
   const axisColor = theme === 'light' ? 'hsl(220 12% 40%)' : 'hsl(215 15% 55%)';
   const gridColor = theme === 'light' ? 'hsl(214 20% 90%)' : 'hsl(222 26% 18%)';
@@ -64,8 +65,15 @@ export default function Dashboard() {
   const netBalance = totalIncome - totalExpenses;
   const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome * 100) : 0;
 
+  const prevIncome = previous.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const prevExpenses = previous.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const prevBalance = prevIncome - prevExpenses;
+  const prevSavingsRate = prevIncome > 0 ? ((prevIncome - prevExpenses) / prevIncome * 100) : 0;
+
+  const incomeChange = prevIncome > 0 ? ((totalIncome - prevIncome) / prevIncome * 100) : 0;
   const expenseChange = prevExpenses > 0 ? ((totalExpenses - prevExpenses) / prevExpenses * 100) : 0;
+  const balanceChange = prevBalance !== 0 ? ((netBalance - prevBalance) / Math.abs(prevBalance) * 100) : 0;
+  const savingsChange = prevSavingsRate > 0 ? ((savingsRate - prevSavingsRate) / prevSavingsRate * 100) : 0;
 
   const pieData = useMemo(() => {
     const byCategory: Record<string, number> = {};
@@ -142,7 +150,9 @@ export default function Dashboard() {
           </h1>
           <p className="text-muted-foreground text-sm font-medium">Analyze your finances by date</p>
         </div>
-        <DateRangePicker />
+        <div data-tour="date-picker">
+          <DateRangePicker />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-4">
@@ -151,14 +161,15 @@ export default function Dashboard() {
           label="Total Income"
           value={formatCurrency(totalIncome, currency)}
           variant="primary"
-          trend="+12%"
+          badge={`${incomeChange > 0 ? '+' : ''}${incomeChange.toFixed(0)}%`}
+          badgePositive={incomeChange >= 0}
         />
         <StatCard
           icon={TrendingDown}
           label="Monthly Expenses"
           value={formatCurrency(totalExpenses, currency)}
           variant="destructive"
-          badge={expenseChange !== 0 ? `${expenseChange > 0 ? '+' : ''}${expenseChange.toFixed(0)}%` : undefined}
+          badge={`${expenseChange > 0 ? '+' : ''}${expenseChange.toFixed(0)}%`}
           badgePositive={expenseChange <= 0}
         />
         <StatCard
@@ -166,18 +177,22 @@ export default function Dashboard() {
           label="Available Balance"
           value={formatCurrency(netBalance, currency)}
           variant={netBalance >= 0 ? 'primary' : 'destructive'}
+          badge={`${balanceChange > 0 ? '+' : ''}${balanceChange.toFixed(0)}%`}
+          badgePositive={balanceChange >= 0}
         />
         <StatCard
           icon={PiggyBank}
           label="Savings Strategy"
           value={`${savingsRate.toFixed(0)}%`}
           variant="accent"
+          badge={`${savingsChange > 0 ? '+' : ''}${savingsChange.toFixed(0)}%`}
+          badgePositive={savingsChange >= 0}
         />
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4">
-        <div className="finance-card p-4 sm:p-5 min-w-0">
+        <div className="finance-card p-4 sm:p-5 min-w-0" data-tour="monthly-summary">
           <h3 className="font-semibold text-foreground text-sm mb-3">Spending by category</h3>
           {pieData.length > 0 ? (
             <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-center">
@@ -185,22 +200,30 @@ export default function Dashboard() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={pieData} cx="50%" cy="50%" innerRadius={44} outerRadius={72} dataKey="value" paddingAngle={3} strokeWidth={0}>
-                      {pieData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                      {pieData.map((entry, i) => (
+                        <Cell
+                          key={i}
+                          fill={CHART_COLORS[i % CHART_COLORS.length]}
+                          onClick={() => setActiveCategory(activeCategory === entry.name ? null : entry.name)}
+                          style={{ cursor: 'pointer', outline: 'none' }}
+                        />
+                      ))}
                     </Pie>
-                    <Tooltip formatter={(v: number) => formatCurrency(v, currency)} contentStyle={tooltipStyle} />
+                    <Tooltip formatter={(v: number) => formatCurrency(v, currency)} contentStyle={tooltipStyle} itemStyle={{ color: 'hsl(160,84%,39%)' }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
               <div className="flex-1 space-y-2 min-w-0 w-full">
                 {pieData.slice(0, 5).map((entry, i) => {
                   const Icon = getCategoryIcon(entry.name);
+                  const isActive = activeCategory === entry.name;
                   return (
                     <div key={entry.name} className="flex items-center gap-2 text-xs">
                       <div className="w-5 h-5 rounded-md flex items-center justify-center" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] + '20' }}>
                         <Icon className="w-3 h-3" style={{ color: CHART_COLORS[i % CHART_COLORS.length] }} />
                       </div>
-                      <span className="text-muted-foreground truncate flex-1">{entry.name}</span>
-                      <span className="font-semibold text-foreground">{formatCurrency(entry.value, currency)}</span>
+                      <span className={cn("truncate flex-1 transition-colors", isActive ? "font-semibold" : "text-muted-foreground")} style={{ color: isActive ? CHART_COLORS[0] : undefined }}>{entry.name}</span>
+                      <span className={cn("font-semibold transition-colors", isActive ? "" : "text-foreground")} style={{ color: isActive ? CHART_COLORS[0] : undefined }}>{formatCurrency(entry.value, currency)}</span>
                     </div>
                   );
                 })}

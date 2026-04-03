@@ -16,6 +16,8 @@ export type Database = {
           currency: string | null
           monthly_income: number | null
           avatar_url: string | null
+          xai_api_key: string | null
+          onboarding_completed: boolean | null
           updated_at: string | null
         }
         Insert: {
@@ -24,6 +26,8 @@ export type Database = {
           currency?: string | null
           monthly_income?: number | null
           avatar_url?: string | null
+          xai_api_key?: string | null
+          onboarding_completed?: boolean | null
           updated_at?: string | null
         }
         Update: {
@@ -32,6 +36,8 @@ export type Database = {
           currency?: string | null
           monthly_income?: number | null
           avatar_url?: string | null
+          xai_api_key?: string | null
+          onboarding_completed?: boolean | null
           updated_at?: string | null
         }
       }

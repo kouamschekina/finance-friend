@@ -43,7 +43,11 @@ type MessageKey =
   | 'transaction.expense'
   | 'transaction.income'
   | 'transaction.category'
-  | 'transaction.save';
+  | 'transaction.save'
+  | 'landing.welcome'
+  | 'landing.signin'
+  | 'landing.google'
+  | 'landing.later';
 
 const catalog: Record<LocaleCode, Record<MessageKey, string>> = {
   en: {
@@ -73,6 +77,10 @@ const catalog: Record<LocaleCode, Record<MessageKey, string>> = {
     'transaction.income': 'Income',
     'transaction.category': 'Category',
     'transaction.save': 'Save',
+    'landing.welcome': 'Welcome to FinWise',
+    'landing.signin': 'Please sign in to continue',
+    'landing.google': 'Sign in with Google',
+    'landing.later': 'Continue Later',
   },
   es: {
     'nav.home': 'Inicio',
@@ -101,6 +109,10 @@ const catalog: Record<LocaleCode, Record<MessageKey, string>> = {
     'transaction.income': 'Ingreso',
     'transaction.category': 'Categoría',
     'transaction.save': 'Guardar',
+    'landing.welcome': 'Bienvenido a FinWise',
+    'landing.signin': 'Inicia sesión para continuar',
+    'landing.google': 'Continuar con Google',
+    'landing.later': 'Continuar más tarde',
   },
   fr: {
     'nav.home': 'Accueil',
@@ -129,6 +141,10 @@ const catalog: Record<LocaleCode, Record<MessageKey, string>> = {
     'transaction.income': 'Revenu',
     'transaction.category': 'Catégorie',
     'transaction.save': 'Enregistrer',
+    'landing.welcome': 'Bienvenue sur FinWise',
+    'landing.signin': 'Veuillez vous connecter pour continuer',
+    'landing.google': 'Continuer avec Google',
+    'landing.later': 'Continuer plus tard',
   },
   de: {
     'nav.home': 'Start',
@@ -157,6 +173,10 @@ const catalog: Record<LocaleCode, Record<MessageKey, string>> = {
     'transaction.income': 'Einnahme',
     'transaction.category': 'Kategorie',
     'transaction.save': 'Speichern',
+    'landing.welcome': 'Willkommen bei FinWise',
+    'landing.signin': 'Bitte melden Sie sich an, um fortzufahren',
+    'landing.google': 'Mit Google anmelden',
+    'landing.later': 'Später fortfahren',
   },
 };
 

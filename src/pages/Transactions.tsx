@@ -41,7 +41,7 @@ export default function Transactions() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Transactions</h1>
           <p className="text-muted-foreground text-sm font-medium">{filtered.length} shown</p>
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto" data-tour="add-transaction-desktop">
           <DateRangePicker className="flex-1 sm:flex-none" />
           <Button
             onClick={() => openTransactionDrawer()}

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import {
   FinanceState, Transaction, Category, SavingsGoal, UserProfile, Notification,
   loadState, saveState, clearLocalState, formatCurrency, DEFAULT_PROFILE,
-  getCategorySpending,
+  DEFAULT_CATEGORIES, getCategorySpending,
 } from '@/lib/finance-store';
 import { toast } from '@/components/ui/sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,6 +22,7 @@ interface FinanceContextType extends FinanceState {
   createNotification: (n: Omit<Notification, 'id' | 'read' | 'created_at'>) => Promise<void>;
   markNotificationAsRead: (id: string) => Promise<void>;
   setDateRange: (range: { from: string; to: string }) => void;
+  completeOnboarding: () => Promise<void>;
   loading: boolean;
 }
 
@@ -65,7 +66,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
-  const checkBudgetAlerts = useCallback((categoryName: string, transactions?: Transaction[]) => {
+  const checkBudgetAlerts = useCallback(async (categoryName: string, transactions?: Transaction[]) => {
     const categories = state.categories;
     const currentTransactions = transactions || state.transactions;
     const cat = categories.find(c => c.name === categoryName);
@@ -76,14 +77,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     const pct = (spent / cat.budget_limit) * 100;
 
     if (pct >= 100) {
-      createNotification({
+      await createNotification({
         title: 'Budget Exceeded! ⚠️',
         message: `You've spent ${formatCurrency(spent, state.profile.currency)} on "${categoryName}", which is over your ${formatCurrency(cat.budget_limit, state.profile.currency)} limit.`,
         type: 'budget_exceeded',
         link: '/budgets'
       });
     } else if (pct >= 85) {
-      createNotification({
+      await createNotification({
         title: 'Budget Warning 🔔',
         message: `You've used ${pct.toFixed(0)}% of your "${categoryName}" budget. You have ${formatCurrency(cat.budget_limit - spent, state.profile.currency)} remaining.`,
         type: 'budget_warning',
@@ -101,12 +102,12 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         { data: categories },
         { data: goals },
         { data: profile },
-        { data: notifications }
+        notifRes
       ] = await Promise.all([
         supabase.from('transactions').select('*').order('date', { ascending: false }),
         supabase.from('categories').select('*'),
         supabase.from('goals').select('*'),
-        supabase.from('profiles').select('*').single(),
+        supabase.from('profiles').select('*').eq('id', user.id).single(),
         (supabase as any).from('notifications').select('*').order('created_at', { ascending: false })
       ]);
 
@@ -123,14 +124,25 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
-      setState(s => ({
-        ...s,
-        transactions: (transactions as Transaction[]) || [],
-        categories: (categories as Category[]) || [],
-        goals: (goals as SavingsGoal[]) || [],
-        notifications: (notifications as Notification[]) || [],
-        profile: (profile as UserProfile) || DEFAULT_PROFILE
-      }));
+      setState(s => {
+        // If the notifications table errors or is missing, keep the local ones.
+        // Also keep local ones that haven't been synced back if we need to.
+        const fetchedNotifs = (!notifRes.error && notifRes.data) ? (notifRes.data as Notification[]) : null;
+        const currentNotifs = fetchedNotifs !== null ? fetchedNotifs : s.notifications;
+
+        // deduplicate any missing local ones (random IDs vs uuid)
+        const serverTitles = new Set(currentNotifs.map(n => n.title + n.message));
+        const missedLocals = s.notifications.filter(n => n.id.length < 20 && !serverTitles.has(n.title + n.message));
+
+        return {
+          ...s,
+          transactions: (transactions as Transaction[]) || [],
+          categories: (categories && (categories as Category[]).length > 0) ? (categories as Category[]) : DEFAULT_CATEGORIES,
+          goals: (goals as SavingsGoal[]) || [],
+          notifications: [...missedLocals, ...currentNotifs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+          profile: (profile as UserProfile) || DEFAULT_PROFILE
+        };
+      });
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -163,14 +175,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       if (goal) {
         const pct = (normalizedTotal / goal.target_amount) * 100;
         if (pct >= 100) {
-          createNotification({
+          await createNotification({
             title: 'Goal reached! 🎉',
             message: `Congratulations! You've saved ${formatCurrency(goal.target_amount, state.profile.currency)} for "${goal.name}".`,
             type: 'goal_reached',
             link: '/goals'
           });
         } else if (pct >= 90) {
-          createNotification({
+          await createNotification({
             title: 'Almost there! 💡',
             message: `You are at 90% of your goal for "${goal.name}". Just a little more!`,
             type: 'goal_milestone',
@@ -186,6 +198,26 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   }, [fetchData, state.goals, state.profile.currency, createNotification]);
 
   useEffect(() => {
+    // One-time cleanup for old demo data
+    const cleanupOldData = () => {
+      const saved = localStorage.getItem('finwise-data');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          // Check for specifically known demo IDs from previous versions
+          const hasDemoData = parsed.transactions?.some((t: any) => t.id === 't1' || t.id === 't2');
+          if (hasDemoData) {
+            console.log('FinWise: Clearing legacy demo data from localStorage');
+            localStorage.removeItem('finwise-data');
+            window.location.reload();
+          }
+        } catch (e) {
+          console.error('Error checking for demo data:', e);
+        }
+      }
+    };
+    cleanupOldData();
+
     if (user) {
       fetchData();
     } else {
@@ -208,7 +240,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   const addTransaction = useCallback(async (t: Omit<Transaction, 'id'>) => {
     if (!user) {
-      toast.error('Please sign in to save data');
+      toast.error('Please sign in to perform this action');
       return;
     }
     try {
@@ -223,7 +255,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       setState(s => ({ ...s, transactions: [data as Transaction, ...s.transactions] }));
 
       if (t.goal_id) await updateGoalProgress(t.goal_id);
-      if (t.category) checkBudgetAlerts(t.category, [data as Transaction, ...state.transactions]);
+      if (t.category) await checkBudgetAlerts(t.category, [data as Transaction, ...state.transactions]);
 
       await fetchData();
     } catch (error) {
@@ -233,7 +265,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   }, [user, state.transactions, updateGoalProgress, checkBudgetAlerts, fetchData]);
 
   const updateTransaction = useCallback(async (t: Transaction) => {
-    if (!user) return;
+    if (!user) {
+      toast.error('Please sign in to perform this action');
+      return;
+    }
     try {
       const oldTr = state.transactions.find(x => x.id === t.id);
       const { error } = await (supabase as any)
@@ -247,7 +282,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
       if (oldTr?.goal_id) await updateGoalProgress(oldTr.goal_id);
       if (t.goal_id && t.goal_id !== oldTr?.goal_id) await updateGoalProgress(t.goal_id);
-      if (t.category) checkBudgetAlerts(t.category);
+      if (t.category) await checkBudgetAlerts(t.category, state.transactions.map(x => x.id === t.id ? t : x));
 
       toast.success('Transaction Updated');
       await fetchData();
@@ -258,7 +293,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   }, [user, state.transactions, updateGoalProgress, checkBudgetAlerts, fetchData]);
 
   const deleteTransaction = useCallback(async (id: string) => {
-    if (!user) return;
+    if (!user) {
+      toast.error('Please sign in to perform this action');
+      return;
+    }
     try {
       const trToDelete = state.transactions.find(x => x.id === id);
       const { error } = await (supabase as any).from('transactions').delete().eq('id', id);
@@ -278,7 +316,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   }, [user, state.transactions, updateGoalProgress, fetchData]);
 
   const addCategory = useCallback(async (c: Omit<Category, 'id'>) => {
-    if (!user) return;
+    if (!user) {
+      toast.error('Please sign in to perform this action');
+      return;
+    }
     try {
       const { data, error } = await (supabase as any)
         .from('categories')
@@ -296,21 +337,27 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const updateCategory = useCallback(async (c: Category) => {
-    if (!user) return;
+    if (!user) {
+      toast.error('Please sign in to perform this action');
+      return;
+    }
     try {
-      const { error } = await (supabase as any).from('categories').update(c).eq('id', c.id);
+      const { error } = await (supabase as any).from('categories').upsert({ ...c, user_id: user.id });
       if (error) throw error;
 
       setState(s => ({ ...s, categories: s.categories.map(x => x.id === c.id ? c : x) }));
       toast.success('Category Updated');
-      checkBudgetAlerts(c.name);
+      await checkBudgetAlerts(c.name);
     } catch (error) {
       toast.error('Failed to update category');
     }
   }, [user, checkBudgetAlerts]);
 
   const deleteCategory = useCallback(async (id: string) => {
-    if (!user) return;
+    if (!user) {
+      toast.error('Please sign in to perform this action');
+      return;
+    }
     try {
       const { error } = await supabase.from('categories').delete().eq('id', id);
       if (error) throw error;
@@ -323,7 +370,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const addGoal = useCallback(async (g: Omit<SavingsGoal, 'id'>) => {
-    if (!user) return;
+    if (!user) {
+      toast.error('Please sign in to perform this action');
+      return;
+    }
     try {
       const { data, error } = await (supabase as any)
         .from('goals')
@@ -341,7 +391,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const updateGoal = useCallback(async (g: SavingsGoal) => {
-    if (!user) return;
+    if (!user) {
+      toast.error('Please sign in to perform this action');
+      return;
+    }
     try {
       const { error } = await (supabase as any).from('goals').update(g).eq('id', g.id);
       if (error) throw error;
@@ -354,7 +407,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const deleteGoal = useCallback(async (id: string) => {
-    if (!user) return;
+    if (!user) {
+      toast.error('Please sign in to perform this action');
+      return;
+    }
     try {
       const { error } = await supabase.from('goals').delete().eq('id', id);
       if (error) throw error;
@@ -367,7 +423,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   const updateProfile = useCallback(async (p: Partial<UserProfile>) => {
-    if (!user) return;
+    if (!user) {
+      // For guest users, update state directly
+      setState(s => ({
+        ...s,
+        profile: { ...s.profile, ...p }
+      }));
+      return;
+    }
     try {
       const { data, error } = await (supabase as any)
         .from('profiles')
@@ -388,6 +451,31 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     setState(s => ({ ...s, dateRange: range }));
   }, []);
 
+  const completeOnboarding = useCallback(async () => {
+    if (!user) {
+      // For guest users, save to local state which will be persisted by the useEffect
+      setState(s => ({
+        ...s,
+        profile: { ...s.profile, onboarding_completed: true }
+      }));
+      return;
+    }
+
+    try {
+      await (supabase as any)
+        .from('profiles')
+        .update({ onboarding_completed: true })
+        .eq('id', user.id);
+
+      setState(s => ({
+        ...s,
+        profile: { ...s.profile, onboarding_completed: true }
+      }));
+    } catch (error) {
+      console.error('Error completing onboarding:', error);
+    }
+  }, [user]);
+
   return (
     <FinanceContext.Provider value={{
       ...state, addTransaction, updateTransaction, deleteTransaction,
@@ -395,6 +483,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       addGoal, updateGoal, deleteGoal, updateProfile,
       createNotification, markNotificationAsRead,
       setDateRange,
+      completeOnboarding,
       loading
     }}>
       {children}

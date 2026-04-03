@@ -20,7 +20,7 @@ export default function Budgets() {
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-10">
       {/* Header */}
-      <div className="flex items-center justify-between px-1">
+      <div className="flex items-center justify-between px-1" data-tour="budgets-header">
         <div>
           <h1 className="text-2xl font-black tracking-tight text-foreground leading-none mb-2">Budgets</h1>
           <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.2em] opacity-70 flex items-center gap-2">
@@ -28,7 +28,7 @@ export default function Budgets() {
             Strategic Planning
           </p>
         </div>
-        <Button onClick={() => openCategoryDrawer()} className="rounded-2xl h-12 finance-gradient border-0 px-6 font-bold shadow-lg shadow-primary/20 active:scale-95 transition-all">
+        <Button onClick={() => openCategoryDrawer()} data-tour="new-budget" className="rounded-2xl h-12 finance-gradient border-0 px-6 font-bold shadow-lg shadow-primary/20 active:scale-95 transition-all">
           <Plus className="w-5 h-5 mr-1" /> New
         </Button>
       </div>

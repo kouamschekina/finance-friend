@@ -1,5 +1,5 @@
 import { useLocation, Link } from 'react-router-dom';
-import { LayoutDashboard, ArrowLeftRight, Wallet, Target, Plus } from 'lucide-react';
+import { LayoutDashboard, ArrowLeftRight, Wallet, Target, Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useUI } from '@/contexts/UIContext';
@@ -12,35 +12,16 @@ export function BottomNav() {
 
   const navItems = [
     { path: '/', label: t('nav.home'), icon: LayoutDashboard },
-    { path: '/transactions', label: t('nav.transactions'), icon: ArrowLeftRight },
-    { path: 'ADD_BUTTON', label: '', icon: Plus },
-    { path: '/budgets', label: t('nav.budgets'), icon: Wallet },
-    { path: '/goals', label: t('nav.goals'), icon: Target },
+    { path: '/transactions', label: t('nav.transactions'), icon: ArrowLeftRight, dataTour: 'nav-activity-mobile' },
+    { path: '/advisor', label: t('page.advisor'), icon: Brain },
+    { path: '/budgets', label: t('nav.budgets'), icon: Wallet, dataTour: 'nav-budgets-mobile' },
+    { path: '/goals', label: t('nav.goals'), icon: Target, dataTour: 'nav-goals-mobile' },
   ];
 
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border/40 bg-background/85 glass pb-safe">
       <div className="mx-auto flex max-w-lg items-end justify-around px-1 pt-2">
         {navItems.map((item) => {
-          if (item.path === 'ADD_BUTTON') {
-            return (
-              <div key="add" className="relative -mt-5 flex flex-col items-center px-2">
-                <motion.button
-                  type="button"
-                  whileTap={{ scale: 0.94 }}
-                  onClick={() => openTransactionDrawer()}
-                  className={cn(
-                    'flex h-14 w-14 items-center justify-center rounded-2xl',
-                    'finance-gradient text-primary-foreground shadow-lg shadow-primary/25',
-                  )}
-                  aria-label={t('transaction.new')}
-                >
-                  <Plus className="h-7 w-7" strokeWidth={2.5} />
-                </motion.button>
-              </div>
-            );
-          }
-
           const active = location.pathname === item.path;
           return (
             <Link
@@ -50,6 +31,7 @@ export function BottomNav() {
                 'flex min-w-[56px] flex-col items-center gap-1 px-2 py-1.5',
                 active ? 'text-primary' : 'text-muted-foreground',
               )}
+              data-tour={(item as any).dataTour}
             >
               <span className="relative flex h-7 w-7 items-center justify-center">
                 <item.icon

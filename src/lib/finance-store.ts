@@ -32,6 +32,7 @@ export interface UserProfile {
   monthly_income: number;
   avatar_url?: string;
   xai_api_key?: string;
+  onboarding_completed?: boolean;
 }
 
 export interface Notification {
@@ -53,24 +54,25 @@ export interface FinanceState {
   dateRange: { from: string; to: string };
 }
 
-const DEFAULT_CATEGORIES: Category[] = [
-  { id: '1', name: 'Food & Dining', icon: 'utensils', color: 'hsl(25, 95%, 53%)', budget_limit: 500 },
-  { id: '2', name: 'Transport', icon: 'car', color: 'hsl(210, 90%, 56%)', budget_limit: 300 },
-  { id: '3', name: 'Housing', icon: 'home', color: 'hsl(160, 84%, 39%)', budget_limit: 1500 },
-  { id: '4', name: 'Utilities', icon: 'lightbulb', color: 'hsl(280, 70%, 55%)', budget_limit: 200 },
-  { id: '5', name: 'Entertainment', icon: 'film', color: 'hsl(340, 82%, 52%)', budget_limit: 200 },
-  { id: '6', name: 'Shopping', icon: 'shopping-bag', color: 'hsl(38, 92%, 50%)', budget_limit: 400 },
-  { id: '7', name: 'Health', icon: 'heart', color: 'hsl(0, 72%, 51%)', budget_limit: 150 },
-  { id: '8', name: 'Business', icon: 'briefcase', color: 'hsl(220, 60%, 50%)', budget_limit: 0 },
-  { id: '9', name: 'Investments', icon: 'trending-up', color: 'hsl(150, 60%, 40%)', budget_limit: 0 },
-  { id: '10', name: 'Salary', icon: 'wallet', color: 'hsl(160, 84%, 39%)', budget_limit: 0 },
+export const DEFAULT_CATEGORIES: Category[] = [
+  { id: '11111111-1111-1111-1111-111111111111', name: 'Food & Dining', icon: 'utensils', color: 'hsl(25, 95%, 53%)', budget_limit: 0 },
+  { id: '22222222-2222-2222-2222-222222222222', name: 'Transport', icon: 'car', color: 'hsl(210, 90%, 56%)', budget_limit: 0 },
+  { id: '33333333-3333-3333-3333-333333333333', name: 'Housing', icon: 'home', color: 'hsl(160, 84%, 39%)', budget_limit: 0 },
+  { id: '44444444-4444-4444-4444-444444444444', name: 'Utilities', icon: 'lightbulb', color: 'hsl(280, 70%, 55%)', budget_limit: 0 },
+  { id: '55555555-5555-5555-5555-555555555555', name: 'Entertainment', icon: 'film', color: 'hsl(340, 82%, 52%)', budget_limit: 0 },
+  { id: '66666666-6666-6666-6666-666666666666', name: 'Shopping', icon: 'shopping-bag', color: 'hsl(38, 92%, 50%)', budget_limit: 0 },
+  { id: '77777777-7777-7777-7777-777777777777', name: 'Health', icon: 'heart', color: 'hsl(0, 72%, 51%)', budget_limit: 0 },
+  { id: '88888888-8888-8888-8888-888888888888', name: 'Business', icon: 'briefcase', color: 'hsl(220, 60%, 50%)', budget_limit: 0 },
+  { id: '99999999-9999-9999-9999-999999999999', name: 'Investments', icon: 'trending-up', color: 'hsl(150, 60%, 40%)', budget_limit: 0 },
+  { id: '00000000-0000-0000-0000-000000000000', name: 'Salary', icon: 'wallet', color: 'hsl(160, 84%, 39%)', budget_limit: 0 },
 ];
 
 export const DEFAULT_PROFILE: UserProfile = {
   name: '',
-  currency: 'USD',
+  currency: 'XAF',
   monthly_income: 0,
   avatar_url: '',
+  onboarding_completed: false,
 };
 
 const now = new Date();
@@ -81,30 +83,9 @@ function d(day: number, monthOffset = 0) {
   return new Date(currentYear, currentMonth + monthOffset, day).toISOString().split('T')[0];
 }
 
-const SAMPLE_TRANSACTIONS: Transaction[] = [
-  { id: 't1', amount: 5000, type: 'income', category: 'Salary', description: 'Monthly salary', date: d(1), payment_method: 'Bank Transfer' },
-  { id: 't2', amount: 1200, type: 'expense', category: 'Housing', description: 'Rent payment', date: d(1), payment_method: 'Bank Transfer' },
-  { id: 't3', amount: 85, type: 'expense', category: 'Food & Dining', description: 'Grocery shopping', date: d(3), payment_method: 'Credit Card' },
-  { id: 't4', amount: 45, type: 'expense', category: 'Transport', description: 'Gas fill-up', date: d(5), payment_method: 'Debit Card' },
-  { id: 't5', amount: 120, type: 'expense', category: 'Utilities', description: 'Electric bill', date: d(7), payment_method: 'Auto Pay' },
-  { id: 't6', amount: 35, type: 'expense', category: 'Entertainment', description: 'Movie night', date: d(8), payment_method: 'Credit Card' },
-  { id: 't7', amount: 200, type: 'expense', category: 'Shopping', description: 'New shoes', date: d(10), payment_method: 'Credit Card' },
-  { id: 't8', amount: 500, type: 'income', category: 'Business', description: 'Freelance project', date: d(12), payment_method: 'PayPal' },
-  { id: 't9', amount: 65, type: 'expense', category: 'Food & Dining', description: 'Restaurant dinner', date: d(14), payment_method: 'Credit Card' },
-  { id: 't10', amount: 30, type: 'expense', category: 'Health', description: 'Pharmacy', date: d(15), payment_method: 'Debit Card' },
-  { id: 't11', amount: 5000, type: 'income', category: 'Salary', description: 'Monthly salary', date: d(1, -1), payment_method: 'Bank Transfer' },
-  { id: 't12', amount: 1200, type: 'expense', category: 'Housing', description: 'Rent payment', date: d(1, -1), payment_method: 'Bank Transfer' },
-  { id: 't13', amount: 350, type: 'expense', category: 'Food & Dining', description: 'Groceries total', date: d(5, -1), payment_method: 'Credit Card' },
-  { id: 't14', amount: 180, type: 'expense', category: 'Transport', description: 'Gas & transit', date: d(8, -1), payment_method: 'Debit Card' },
-  { id: 't15', amount: 150, type: 'expense', category: 'Entertainment', description: 'Concert tickets', date: d(12, -1), payment_method: 'Credit Card' },
-  { id: 't16', amount: 100, type: 'expense', category: 'Utilities', description: 'Internet & phone', date: d(15, -1), payment_method: 'Auto Pay' },
-];
+const SAMPLE_TRANSACTIONS: Transaction[] = [];
 
-const SAMPLE_GOALS: SavingsGoal[] = [
-  { id: 'g1', name: 'Emergency Fund', target_amount: 10000, current_amount: 4500, deadline: new Date(currentYear, currentMonth + 6, 1).toISOString().split('T')[0], icon: 'shield' },
-  { id: 'g2', name: 'Vacation', target_amount: 3000, current_amount: 1200, deadline: new Date(currentYear, currentMonth + 4, 1).toISOString().split('T')[0], icon: 'plane' },
-  { id: 'g3', name: 'New Laptop', target_amount: 2000, current_amount: 800, deadline: new Date(currentYear, currentMonth + 3, 1).toISOString().split('T')[0], icon: 'laptop' },
-];
+const SAMPLE_GOALS: SavingsGoal[] = [];
 
 const STORAGE_KEY = 'finwise-data';
 
@@ -116,7 +97,7 @@ export function loadState(): FinanceState {
     categories: DEFAULT_CATEGORIES,
     goals: SAMPLE_GOALS,
     notifications: [],
-    profile: { ...DEFAULT_PROFILE, name: 'User', monthly_income: 5000 },
+    profile: { ...DEFAULT_PROFILE },
     dateRange: { from: startOfMonth, to: endOfMonth },
   };
 
@@ -173,7 +154,7 @@ export function getFilteredTransactions(transactions: Transaction[], from: strin
   });
 }
 
-export function formatCurrency(amount: number, currency: string = 'USD'): string {
+export function formatCurrency(amount: number, currency: string = 'XAF'): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
 }
 

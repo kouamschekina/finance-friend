@@ -2,10 +2,11 @@
 CREATE TABLE IF NOT EXISTS profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     name TEXT,
-    currency TEXT DEFAULT 'USD',
+    currency TEXT DEFAULT 'XAF',
     monthly_income NUMERIC DEFAULT 0,
     avatar_url TEXT,
     xai_api_key TEXT, -- User's own xAI (Grok) API key
+    onboarding_completed BOOLEAN DEFAULT FALSE,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -17,6 +18,18 @@ CREATE TABLE IF NOT EXISTS categories (
     icon TEXT,
     color TEXT,
     budget_limit NUMERIC DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Goals table
+CREATE TABLE IF NOT EXISTS goals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    target_amount NUMERIC NOT NULL,
+    current_amount NUMERIC DEFAULT 0,
+    deadline DATE,
+    icon TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -34,18 +47,6 @@ CREATE TABLE IF NOT EXISTS transactions (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Goals table
-CREATE TABLE IF NOT EXISTS goals (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    target_amount NUMERIC NOT NULL,
-    current_amount NUMERIC DEFAULT 0,
-    deadline DATE,
-    icon TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 -- Enable RLS
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
@@ -53,20 +54,35 @@ ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE goals ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
+DROP POLICY IF EXISTS "Users can view their own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can update their own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can insert their own profile" ON profiles;
 CREATE POLICY "Users can view their own profile" ON profiles FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Users can update their own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
 CREATE POLICY "Users can insert their own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can view their own categories" ON categories;
+DROP POLICY IF EXISTS "Users can insert their own categories" ON categories;
+DROP POLICY IF EXISTS "Users can update their own categories" ON categories;
+DROP POLICY IF EXISTS "Users can delete their own categories" ON categories;
 CREATE POLICY "Users can view their own categories" ON categories FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert their own categories" ON categories FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update their own categories" ON categories FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete their own categories" ON categories FOR DELETE USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can view their own transactions" ON transactions;
+DROP POLICY IF EXISTS "Users can insert their own transactions" ON transactions;
+DROP POLICY IF EXISTS "Users can update their own transactions" ON transactions;
+DROP POLICY IF EXISTS "Users can delete their own transactions" ON transactions;
 CREATE POLICY "Users can view their own transactions" ON transactions FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert their own transactions" ON transactions FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update their own transactions" ON transactions FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete their own transactions" ON transactions FOR DELETE USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can view their own goals" ON goals;
+DROP POLICY IF EXISTS "Users can insert their own goals" ON goals;
+DROP POLICY IF EXISTS "Users can update their own goals" ON goals;
+DROP POLICY IF EXISTS "Users can delete their own goals" ON goals;
 CREATE POLICY "Users can view their own goals" ON goals FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert their own goals" ON goals FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update their own goals" ON goals FOR UPDATE USING (auth.uid() = user_id);
@@ -85,6 +101,10 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view their own notifications" ON notifications;
+DROP POLICY IF EXISTS "Users can update their own notifications" ON notifications;
+DROP POLICY IF EXISTS "Users can delete their own notifications" ON notifications;
+DROP POLICY IF EXISTS "Users can insert their own notifications" ON notifications;
 CREATE POLICY "Users can view their own notifications" ON notifications FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can update their own notifications" ON notifications FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete their own notifications" ON notifications FOR DELETE USING (auth.uid() = user_id);

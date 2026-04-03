@@ -18,8 +18,42 @@ import Profile from "./pages/Profile";
 import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
 import { InstallPWA } from "@/components/InstallPWA";
+import { Landing } from "./pages/Landing";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient();
+
+const AppContent = () => {
+  const { user, loading } = useAuth();
+  const [skipLanding, setSkipLanding] = useState(() => {
+    return sessionStorage.getItem('finwise-skip-landing') === 'true';
+  });
+
+  if (loading) return null;
+
+  if (!user && !skipLanding) {
+    return <Landing onContinueLater={() => {
+      setSkipLanding(true);
+      sessionStorage.setItem('finwise-skip-landing', 'true');
+    }} />;
+  }
+
+  return (
+    <AppLayout>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/transactions" element={<Transactions />} />
+        <Route path="/budgets" element={<Budgets />} />
+        <Route path="/goals" element={<Goals />} />
+        <Route path="/advisor" element={<Advisor />} />
+        <Route path="/reports" element={<Reports />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </AppLayout>
+  );
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -33,18 +67,7 @@ const App = () => (
               <UIProvider>
                 <InstallPWA />
                 <BrowserRouter>
-                  <AppLayout>
-                    <Routes>
-                      <Route path="/" element={<Dashboard />} />
-                      <Route path="/transactions" element={<Transactions />} />
-                      <Route path="/budgets" element={<Budgets />} />
-                      <Route path="/goals" element={<Goals />} />
-                      <Route path="/advisor" element={<Advisor />} />
-                      <Route path="/reports" element={<Reports />} />
-                      <Route path="/profile" element={<Profile />} />
-                      <Route path="*" element={<NotFound />} />
-                    </Routes>
-                  </AppLayout>
+                  <AppContent />
                 </BrowserRouter>
               </UIProvider>
             </FinanceProvider>

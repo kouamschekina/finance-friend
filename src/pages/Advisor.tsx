@@ -60,8 +60,9 @@ Categories: ${categoryBreakdown || 'None'} | Goals: ${goalsInfo || 'None'}`;
   const sendMessage = async (text: string) => {
     if (!text.trim() || isLoading) return;
 
-    if (!profile.xai_api_key) {
-      toast.error('Please set your xAI (Grok) API Key in Profile first.');
+    const groqKey = import.meta.env.VITE_GROQ_API_KEY;
+    if (!groqKey) {
+      toast.error('AI Advisor is currently unavailable (Missing API Key).');
       return;
     }
 
@@ -71,18 +72,18 @@ Categories: ${categoryBreakdown || 'None'} | Goals: ${goalsInfo || 'None'}`;
     setIsLoading(true);
 
     try {
-      const response = await fetch('https://api.x.ai/v1/chat/completions', {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${profile.xai_api_key}`,
+          'Authorization': `Bearer ${groqKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'grok-beta',
+          model: 'llama-3.3-70b-versatile',
           messages: [
             {
               role: 'system',
-              content: `You are FinWise AI, a world-class financial advisor powered by Grok. 
+              content: `You are FinWise AI, a world-class financial advisor powered by Groq. 
               Your goal is to provide strategic, empathetic, and highly actionable financial advice based on the user's real data.
               Always be precise with numbers. If the user is overspending, suggest realistic ways to cut back.
               If they are doing well, encourage them and suggest investment or growth strategies.
@@ -101,7 +102,7 @@ Categories: ${categoryBreakdown || 'None'} | Goals: ${goalsInfo || 'None'}`;
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || 'xAI service failed. Check your API key.');
+        throw new Error(errorData.error?.message || 'Advisor service failed.');
       }
 
       const data = await response.json();
@@ -110,7 +111,7 @@ Categories: ${categoryBreakdown || 'None'} | Goals: ${goalsInfo || 'None'}`;
       setMessages(prev => [...prev, { role: 'assistant', content: aiContent }]);
     } catch (e) {
       console.error(e);
-      toast.error(e instanceof Error ? e.message : 'xAI Service Unavailable');
+      toast.error(e instanceof Error ? e.message : 'Advisor Service Unavailable');
     } finally {
       setIsLoading(false);
     }

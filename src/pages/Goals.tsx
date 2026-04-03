@@ -15,12 +15,12 @@ export default function Goals() {
 
   return (
     <div className="space-y-5 animate-fade-in min-w-0">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" data-tour="goals-header">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Savings goals</h1>
           <p className="text-muted-foreground text-sm">Track progress toward targets</p>
         </div>
-        <Button onClick={() => openGoalDrawer()} size="sm" className="gap-1.5 rounded-xl h-11 finance-gradient border-0 px-5 w-full sm:w-auto shrink-0 font-bold shadow-lg shadow-primary/20">
+        <Button onClick={() => openGoalDrawer()} data-tour="new-goal" size="sm" className="gap-1.5 rounded-xl h-11 finance-gradient border-0 px-5 w-full sm:w-auto shrink-0 font-bold shadow-lg shadow-primary/20">
           <Plus className="w-5 h-5" /> New goal
         </Button>
       </div>

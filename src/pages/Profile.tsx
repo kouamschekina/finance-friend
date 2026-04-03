@@ -15,7 +15,19 @@ import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
-const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'INR', 'BRL', 'NGN'];
+const CURRENCIES = [
+  { code: 'XAF', name: 'CFA Franc', flag: '🇨🇲' },
+  { code: 'USD', name: 'US Dollar', flag: '🇺🇸' },
+  { code: 'EUR', name: 'Euro', flag: '🇪🇺' },
+  { code: 'GBP', name: 'British Pound', flag: '🇬🇧' },
+  { code: 'JPY', name: 'Japanese Yen', flag: '🇯🇵' },
+  { code: 'CAD', name: 'Canadian Dollar', flag: '🇨🇦' },
+  { code: 'AUD', name: 'Australian Dollar', flag: '🇦🇺' },
+  { code: 'CHF', name: 'Swiss Franc', flag: '🇨🇭' },
+  { code: 'INR', name: 'Indian Rupee', flag: '🇮🇳' },
+  { code: 'BRL', name: 'Brazilian Real', flag: '🇧🇷' },
+  { code: 'NGN', name: 'Nigerian Naira', flag: '🇳🇬' },
+];
 
 const StatCard = ({ label, value, icon: Icon, colorClass, delay }: any) => (
   <motion.div
@@ -227,10 +239,24 @@ export default function Profile() {
                 <label className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest pl-1">Primary Currency</label>
                 <Select value={profile.currency} onValueChange={v => updateProfile({ currency: v })}>
                   <SelectTrigger className="h-12 rounded-xl bg-secondary/20 border-border/20">
-                    <SelectValue />
+                    <div className="flex items-center gap-2">
+                      <SelectValue placeholder={profile.currency} />
+                    </div>
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl border-border/40">
-                    {CURRENCIES.map(c => <SelectItem key={c} value={c} className="rounded-lg my-0.5">{c}</SelectItem>)}
+                  <SelectContent className="rounded-xl border-border/40 min-w-[200px]">
+                    {CURRENCIES.map(c => (
+                      <SelectItem key={c.code} value={c.code} className="rounded-lg my-0.5">
+                        <div className="flex items-center justify-between w-full gap-8">
+                          <div className="flex items-center gap-3">
+                            <span className="text-lg">{c.flag}</span>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-bold">{c.code}</span>
+                              <span className="text-[10px] text-muted-foreground font-medium">{c.name}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -243,19 +269,8 @@ export default function Profile() {
                   className="h-12 rounded-xl bg-secondary/20 border-border/20 transition-all font-bold tabular-nums"
                 />
               </div>
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between pl-1">
-                  <label className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest">xAI (Grok) API Key</label>
-                  <a href="https://console.x.ai/" target="_blank" rel="noopener noreferrer" className="text-[9px] text-primary font-bold hover:underline">Get Key</a>
-                </div>
-                <Input
-                  type="password"
-                  placeholder="xai-..."
-                  value={profile.xai_api_key || ''}
-                  onChange={e => updateProfile({ xai_api_key: e.target.value })}
-                  className="h-12 rounded-xl bg-secondary/20 border-border/20 transition-all font-mono text-xs"
-                />
-                <p className="px-1 text-[9px] text-muted-foreground/60 font-medium">Your key is stored securely in your private cloud profile.</p>
+              <div className="pt-2">
+                <p className="px-1 text-[9px] text-muted-foreground/60 font-medium text-center">Your data is synced securely with your private cloud profile.</p>
               </div>
             </div>
           </div>

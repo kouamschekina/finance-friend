@@ -68,11 +68,6 @@ export function InstallPWA() {
 
     return (
         <>
-            {isDev && (
-                <div className="fixed bottom-4 left-4 z-50 p-2 bg-black/80 text-[10px] text-white rounded-lg pointer-events-none opacity-50 font-mono">
-                    PWA Debug: Event:{deferredPrompt ? '✅' : '❌'} | SW:{swStatus} | Visible:{isVisible ? '✅' : '❌'}
-                </div>
-            )}
             <AnimatePresence>
                 {isVisible && (
                     <motion.div
