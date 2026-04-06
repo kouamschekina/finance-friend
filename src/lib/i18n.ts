@@ -3,7 +3,7 @@ export type LocaleCode = (typeof LOCALE_CODES)[number];
 
 export const DEFAULT_LOCALE: LocaleCode = 'en';
 
-export const LOCALE_STORAGE_KEY = 'finwise-locale';
+export const LOCALE_STORAGE_KEY = 'fenowa-locale';
 
 export function isLocaleCode(value: string): value is LocaleCode {
   return (LOCALE_CODES as readonly string[]).includes(value);
@@ -131,7 +131,7 @@ const catalog: Record<LocaleCode, Record<MessageKey, string>> = {
     'notifications.viewDetails': 'View details',
     'menu.title': 'Menu',
     'menu.exportPdf': 'Export PDF',
-    'landing.welcome': 'Welcome to FinWise',
+    'landing.welcome': 'Welcome to Fenowa',
     'landing.signin': 'Please sign in to continue',
     'landing.google': 'Sign in with Google',
     'landing.later': 'Continue Later',
@@ -191,7 +191,7 @@ const catalog: Record<LocaleCode, Record<MessageKey, string>> = {
     'notifications.viewDetails': 'Voir les détails',
     'menu.title': 'Menu',
     'menu.exportPdf': 'Exporter PDF',
-    'landing.welcome': 'Bienvenue sur FinWise',
+    'landing.welcome': 'Bienvenue sur Fenowa',
     'landing.signin': 'Veuillez vous connecter pour continuer',
     'landing.google': 'Continuer avec Google',
     'landing.later': 'Continuer plus tard',

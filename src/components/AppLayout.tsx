@@ -57,7 +57,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
 
   const titleKey = pathToTitleKey[location.pathname as keyof typeof pathToTitleKey];
-  const title = titleKey ? t(titleKey) : 'FinWise';
+  const title = titleKey ? t(titleKey) : 'Fenowa';
 
   const authAvatarUrl = (user?.user_metadata?.avatar_url as string | undefined) ?? '';
   const avatar_url = authAvatarUrl || profile.avatar_url || '';
@@ -68,25 +68,28 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { path: '/transactions', label: t('nav.transactions'), icon: ArrowLeftRight, dataTour: 'nav-activity-desktop' },
     { path: '/budgets', label: t('nav.budgets'), icon: Wallet, dataTour: 'nav-budgets-desktop' },
     { path: '/goals', label: t('nav.goals'), icon: Target, dataTour: 'nav-goals-desktop' },
+    { path: '/advisor', label: t('page.advisor'), icon: Brain },
+    { path: '/reports', label: t('page.reports'), icon: FileText },
+    { path: '/profile', label: t('page.profile'), icon: User },
   ];
 
   return (
     <div
       className={cn(
-        'flex bg-background text-foreground overflow-x-hidden',
+        'flex bg-background text-foreground overflow-x-hidden lg:h-[100dvh] lg:overflow-hidden',
         isAdvisor ? 'h-[100dvh] overflow-y-hidden' : 'min-h-[100dvh]',
       )}
     >
       <OnboardingTour />
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex flex-col w-[17.5rem] shrink-0 border-r border-border/50 bg-sidebar/80 backdrop-blur-xl pt-safe">
+      <aside className="hidden lg:flex flex-col w-[17.5rem] shrink-0 border-r border-border/50 bg-sidebar/80 backdrop-blur-xl pt-safe pb-4 overflow-hidden">
         <div className="flex flex-col gap-1 p-5 pb-4 border-b border-border/40">
           <div className="flex items-center gap-3 px-1">
             <div className="w-11 h-11 rounded-2xl p-2 bg-card border border-border/40 shrink-0 shadow-sm overflow-hidden">
               <img src="/logowithoutbg.png" alt="Logo" className="w-full h-full object-contain" />
             </div>
             <div className="min-w-0">
-              <p className="text-base font-bold tracking-tight truncate">FinWise</p>
+              <p className="text-base font-bold tracking-tight truncate">Fenowa</p>
               <p className="text-[11px] text-muted-foreground font-medium truncate">
                 {profile.name || t('page.dashboard')}
               </p>
@@ -94,7 +97,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        <nav className="flex flex-col gap-0.5 p-3 flex-1">
+        <nav className="flex flex-col gap-0.5 p-3 flex-1 min-h-0 overflow-hidden">
           {navItems.map((item) => {
             const active = location.pathname === item.path;
             return (
@@ -147,7 +150,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main column */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 lg:min-h-0 lg:overflow-hidden">
         {isHome && (
           <header className="sticky top-0 z-40 glass border-b border-border/40 pt-safe">
             <div className="flex items-center justify-between gap-3 px-4 py-3 lg:px-8 lg:py-4 max-w-6xl mx-auto w-full">
@@ -216,7 +219,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </header>
         )}
 
-        <main className="flex-1 flex flex-col min-h-0">
+        <main className="flex-1 flex flex-col min-h-0 lg:overflow-y-auto">
           <div
             className={cn(
               'flex-1 lg:pb-10',

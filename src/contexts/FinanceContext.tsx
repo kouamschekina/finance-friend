@@ -200,15 +200,15 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // One-time cleanup for old demo data
     const cleanupOldData = () => {
-      const saved = localStorage.getItem('finwise-data');
+      const saved = localStorage.getItem('fenowa-data');
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
           // Check for specifically known demo IDs from previous versions
           const hasDemoData = parsed.transactions?.some((t: any) => t.id === 't1' || t.id === 't2');
           if (hasDemoData) {
-            console.log('FinWise: Clearing legacy demo data from localStorage');
-            localStorage.removeItem('finwise-data');
+            console.log('Fenowa: Clearing legacy demo data from localStorage');
+            localStorage.removeItem('fenowa-data');
             window.location.reload();
           }
         } catch (e) {

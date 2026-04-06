@@ -3,7 +3,7 @@ export type ThemeId = (typeof THEME_IDS)[number];
 
 export const DEFAULT_THEME: ThemeId = 'ocean';
 
-export const THEME_STORAGE_KEY = 'finwise-theme';
+export const THEME_STORAGE_KEY = 'fenowa-theme';
 
 export function isThemeId(value: string): value is ThemeId {
   return (THEME_IDS as readonly string[]).includes(value);

@@ -84,8 +84,8 @@ export function InstallPWA() {
                             </div>
 
                             <div className="flex-1 min-w-0 z-10">
-                                <h3 className="text-sm font-bold text-foreground leading-tight">Install FinWise</h3>
-                                <p className="text-[11px] text-muted-foreground font-medium mt-0.5">Add to home screen for a better experience.</p>
+                                <h3 className="text-sm font-bold text-foreground leading-tight">Install Fenowa</h3>
+                                <p className="text-[11px] text-muted-foreground font-medium mt-0.5">Install for better experience.</p>
                             </div>
 
                             <div className="flex flex-col gap-2 z-10">

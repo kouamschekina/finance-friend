@@ -89,7 +89,7 @@ Categories: ${categoryBreakdown || 'None'} | Goals: ${goalsInfo || 'None'}`;
           messages: [
             {
               role: 'system',
-              content: `You are FinWise AI, a world-class financial advisor powered by Groq. 
+              content: `You are Fenowa AI, a world-class financial advisor powered by Groq. 
               Your goal is to provide strategic, empathetic, and highly actionable financial advice based on the user's real data.
               Always be precise with numbers. If the user is overspending, suggest realistic ways to cut back.
               If they are doing well, encourage them and suggest investment or growth strategies.

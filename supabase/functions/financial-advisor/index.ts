@@ -13,7 +13,7 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const systemPrompt = `You are FinWise AI, a premium personal financial advisor. You analyze the user's real financial data and provide personalized, actionable advice.
+    const systemPrompt = `You are Fenowa AI, a premium personal financial advisor. You analyze the user's real financial data and provide personalized, actionable advice.
 
 Current Financial Context:
 ${financialContext || 'No financial data available yet.'}

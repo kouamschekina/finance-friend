@@ -27,7 +27,7 @@ const queryClient = new QueryClient();
 const AppContent = () => {
   const { user, loading } = useAuth();
   const [skipLanding, setSkipLanding] = useState(() => {
-    return sessionStorage.getItem('finwise-skip-landing') === 'true';
+    return sessionStorage.getItem('fenowa-skip-landing') === 'true';
   });
 
   if (loading) return null;
@@ -35,7 +35,7 @@ const AppContent = () => {
   if (!user && !skipLanding) {
     return <Landing onContinueLater={() => {
       setSkipLanding(true);
-      sessionStorage.setItem('finwise-skip-landing', 'true');
+      sessionStorage.setItem('fenowa-skip-landing', 'true');
     }} />;
   }
 

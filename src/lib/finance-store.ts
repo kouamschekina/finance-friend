@@ -65,6 +65,11 @@ export const DEFAULT_CATEGORIES: Category[] = [
   { id: '88888888-8888-8888-8888-888888888888', name: 'Business', icon: 'briefcase', color: 'hsl(220, 60%, 50%)', budget_limit: 0 },
   { id: '99999999-9999-9999-9999-999999999999', name: 'Investments', icon: 'trending-up', color: 'hsl(150, 60%, 40%)', budget_limit: 0 },
   { id: '00000000-0000-0000-0000-000000000000', name: 'Salary', icon: 'wallet', color: 'hsl(160, 84%, 39%)', budget_limit: 0 },
+  { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', name: 'Education', icon: 'book', color: 'hsl(270, 65%, 55%)', budget_limit: 0 },
+  { id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', name: 'Personal Care', icon: 'sparkles', color: 'hsl(320, 70%, 50%)', budget_limit: 0 },
+  { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', name: 'Gifts & Donations', icon: 'gift', color: 'hsl(350, 75%, 55%)', budget_limit: 0 },
+  { id: 'dddddddd-dddd-dddd-dddd-dddddddddddd', name: 'Travel', icon: 'plane', color: 'hsl(190, 80%, 50%)', budget_limit: 0 },
+  { id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', name: 'Subscriptions', icon: 'credit-card', color: 'hsl(250, 70%, 55%)', budget_limit: 0 },
 ];
 
 export const DEFAULT_PROFILE: UserProfile = {
@@ -87,7 +92,7 @@ const SAMPLE_TRANSACTIONS: Transaction[] = [];
 
 const SAMPLE_GOALS: SavingsGoal[] = [];
 
-const STORAGE_KEY = 'finwise-data';
+const STORAGE_KEY = 'fenowa-data';
 
 export function loadState(): FinanceState {
   const startOfMonth = new Date(currentYear, currentMonth, 1).toISOString().split('T')[0];

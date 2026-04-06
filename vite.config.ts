@@ -23,8 +23,8 @@ export default defineConfig(({ mode }) => ({
       },
       includeAssets: ['favicon.ico', 'robots.txt', 'apple-touch-icon.png'],
       manifest: {
-        name: 'FinWise',
-        short_name: 'FinWise',
+        name: 'Fenowa',
+        short_name: 'Fenowa',
         description: 'Personal finance, budgets, and savings goals.',
         theme_color: '#0b1220',
         background_color: '#0b1220',

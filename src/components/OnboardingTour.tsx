@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, ChevronLeft, X, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-const ONBOARDING_TOUR_STORAGE_KEY = 'finwise-onboarding-tour-dismissed-v1';
+const ONBOARDING_TOUR_STORAGE_KEY = 'fenowa-onboarding-tour-dismissed-v1';
 
 const Tooltip = ({
     index,
@@ -105,7 +105,7 @@ export const OnboardingTour: React.FC = () => {
 
         if (profile && profile.onboarding_completed !== true) {
             const timer = setTimeout(() => {
-                console.log('FinWise: Starting Onboarding Tour');
+                console.log('Fenowa: Starting Onboarding Tour');
                 try {
                     localStorage.setItem(ONBOARDING_TOUR_STORAGE_KEY, '1');
                 } catch (e) {
@@ -121,7 +121,7 @@ export const OnboardingTour: React.FC = () => {
         {
             target: 'body',
             placement: 'center',
-            title: 'Welcome to FinWise! 🏦',
+            title: 'Welcome to Fenowa! 🏦',
             content: 'Take a quick tour of your financial command center. We\'ll show you how to track, save, and grow your wealth.',
             disableBeacon: true,
         },

@@ -80,7 +80,7 @@ export const Landing: React.FC<LandingProps> = ({ onContinueLater }) => {
                         >
                             <img
                                 src="/logowithoutbg.png"
-                                alt="FinWise Logo"
+                                alt="Fenowa Logo"
                                 className="w-full h-full object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.15)]"
                             />
                         </motion.div>
@@ -137,7 +137,7 @@ export const Landing: React.FC<LandingProps> = ({ onContinueLater }) => {
             </main>
 
             <footer className="py-8 text-center text-[11px] font-bold tracking-widest uppercase text-muted-foreground/40 z-10">
-                &copy; 2026 FinWise · Smart Wealth Management
+                &copy; 2026 Fenowa · Smart Wealth Management
             </footer>
         </div>
     );
