@@ -61,11 +61,11 @@ export function CategoryDrawer() {
                         <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                                 <DrawerTitle className="text-lg font-bold tracking-tight pr-2">
-                                    {editingCategoryId ? 'Edit Budget' : 'Set Budget Limit'}
+                                    {editingCategoryId ? t('category.edit_budget') : t('category.set_budget')}
                                 </DrawerTitle>
                                 <p className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5 mt-0.5 uppercase tracking-wider opacity-70">
                                     <Wallet className="w-3 h-3 text-primary" strokeWidth={2.5} />
-                                    Accountability Flow
+                                    {t('category.accountability')}
                                 </p>
                             </div>
                             <div className="flex items-center gap-1">
@@ -88,7 +88,7 @@ export function CategoryDrawer() {
                     <div className="space-y-8 pt-4">
                         <section>
                             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                Select Category
+                                {t('category.select_category')}
                             </h3>
                             <CategoryGrid
                                 categories={categories}
@@ -98,7 +98,7 @@ export function CategoryDrawer() {
                         </section>
 
                         <p className="text-[11px] text-muted-foreground font-medium text-center italic px-4">
-                            Select a category above and enter your monthly spending limit using the keypad.
+                            {t('category.hint')}
                         </p>
                     </div>
 
@@ -112,7 +112,7 @@ export function CategoryDrawer() {
                                 !selectedCategory && "opacity-50 grayscale"
                             )}
                         >
-                            Save Budget Limit
+                            {t('category.save_budget')}
                         </Button>
                     </DrawerFooter>
                 </div>

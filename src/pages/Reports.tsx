@@ -11,6 +11,7 @@ import { Download, Loader2 } from 'lucide-react';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { format } from 'date-fns';
 import { generateFinancialReport } from '@/lib/pdf-report';
+import { useTranslation } from 'react-i18next';
 
 type CategoryRow = {
   name: string;
@@ -30,6 +31,7 @@ function formatRange(from: string, to?: string) {
 }
 
 export default function Reports() {
+  const { t } = useTranslation();
   const { transactions, categories, goals, profile, dateRange } = useFinance();
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -98,9 +100,9 @@ export default function Reports() {
     <div className="max-w-4xl mx-auto space-y-6 pb-10">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between no-print">
         <div className="min-w-0">
-          <h1 className="text-2xl font-black tracking-tight text-foreground leading-none mb-2">Reports</h1>
+          <h1 className="text-2xl font-black tracking-tight text-foreground leading-none mb-2">{t('reports.title')}</h1>
           <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.2em] opacity-70">
-            Analysis & Insights
+            {t('reports.subtitle')}
           </p>
         </div>
 
@@ -117,8 +119,8 @@ export default function Reports() {
             ) : (
               <Download className="w-4 h-4 mr-2" />
             )}
-            <span className="hidden sm:inline">{isGenerating ? 'Generating...' : 'Export PDF'}</span>
-            <span className="sm:hidden">{isGenerating ? '...' : 'PDF'}</span>
+            <span className="hidden sm:inline">{isGenerating ? t('common.loading') : t('reports.export_pdf')}</span>
+            <span className="sm:hidden">{isGenerating ? '...' : t('reports.pdf')}</span>
           </Button>
         </div>
       </div>
@@ -134,7 +136,7 @@ export default function Reports() {
                     Fenowa
                   </p>
                   <p className="text-[11px] text-muted-foreground font-medium">
-                    Financial Report
+                    {t('reports.financial_report')}
                   </p>
                 </div>
               </div>
@@ -144,18 +146,18 @@ export default function Reports() {
                   {profile.name || 'User'}
                 </p>
                 <p className="text-[11px] text-muted-foreground font-medium">
-                  Currency: {profile.currency}
+                  {t('reports.currency_label')}: {profile.currency}
                 </p>
               </div>
             </div>
 
             <div className="text-right">
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">
-                Period
+                {t('reports.period')}
               </p>
               <p className="text-sm font-semibold text-foreground">{formatRange(dateRange.from, dateRange.to)}</p>
               <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">
-                Generated
+                {t('reports.generated')}
               </p>
               <p className="text-sm font-semibold text-foreground">
                 {new Date().toLocaleDateString('en-US', {
@@ -170,7 +172,7 @@ export default function Reports() {
           <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="rounded-2xl border border-border/50 bg-secondary/20 p-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
-                Income
+                {t('reports.income')}
               </p>
               <p className="mt-1 text-lg font-black text-primary tabular-nums">
                 {formatCurrency(totals.income, profile.currency)}
@@ -178,7 +180,7 @@ export default function Reports() {
             </div>
             <div className="rounded-2xl border border-border/50 bg-secondary/20 p-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
-                Expenses
+                {t('reports.expenses')}
               </p>
               <p className="mt-1 text-lg font-black text-destructive tabular-nums">
                 {formatCurrency(totals.expenses, profile.currency)}
@@ -186,7 +188,7 @@ export default function Reports() {
             </div>
             <div className="rounded-2xl border border-border/50 bg-secondary/20 p-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
-                Net
+                {t('reports.net')}
               </p>
               <p className="mt-1 text-lg font-black text-foreground tabular-nums">
                 {formatCurrency(totals.net, profile.currency)}
@@ -194,7 +196,7 @@ export default function Reports() {
             </div>
             <div className="rounded-2xl border border-border/50 bg-secondary/20 p-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
-                Savings Rate
+                {t('reports.savings_rate')}
               </p>
               <p className="mt-1 text-lg font-black text-foreground tabular-nums">
                 {totals.savingsRate.toFixed(0)}%
@@ -205,12 +207,12 @@ export default function Reports() {
           <div className="mt-7 grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="rounded-2xl border border-border/50 bg-card/40 p-5">
               <p className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground/60 mb-3">
-                Spending by Category
+                {t('reports.spending_by_category')}
               </p>
 
               <div className="space-y-2">
                 {categoryRows.length === 0 && (
-                  <p className="text-sm text-muted-foreground font-medium">No expenses recorded.</p>
+                  <p className="text-sm text-muted-foreground font-medium">{t('reports.no_expenses')}</p>
                 )}
 
                 {categoryRows.slice(0, 8).map((r) => {
@@ -250,12 +252,12 @@ export default function Reports() {
 
             <div className="rounded-2xl border border-border/50 bg-card/40 p-5">
               <p className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground/60 mb-3">
-                Largest Expenses
+                {t('reports.largest_expenses')}
               </p>
 
               <div className="space-y-2">
                 {topTransactions.length === 0 && (
-                  <p className="text-sm text-muted-foreground font-medium">No expenses recorded.</p>
+                  <p className="text-sm text-muted-foreground font-medium">{t('reports.no_expenses')}</p>
                 )}
 
                 {topTransactions.map((x) => (
@@ -287,17 +289,17 @@ export default function Reports() {
 
           <div className="mt-7 flex items-center justify-between gap-3">
             <p className="text-[11px] text-muted-foreground font-medium">
-              Generated by Fenowa
+              {t('reports.generated_by')}
             </p>
             <p className="text-[11px] text-muted-foreground font-medium">
-              Profile · {profile.currency}
+              {t('reports.currency_label')} · {profile.currency}
             </p>
           </div>
         </div>
       </div>
 
       <div className="no-print text-[11px] text-muted-foreground font-medium">
-        Tip: after clicking “Export PDF”, choose “Save as PDF”.
+        {t('reports.pdf_tip')}
       </div>
     </div>
   );

@@ -11,8 +11,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DateRangePicker } from '@/components/DateRangePicker';
+import { useTranslation } from 'react-i18next';
 
 export default function Transactions() {
+  const { t } = useTranslation();
   const { transactions, categories, profile, dateRange, deleteTransaction } = useFinance();
   const { openTransactionDrawer } = useUI();
   const [search, setSearch] = useState('');
@@ -38,8 +40,8 @@ export default function Transactions() {
     <div className="space-y-5 sm:space-y-6 min-w-0">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Transactions</h1>
-          <p className="text-muted-foreground text-sm font-medium">{filtered.length} shown</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{t('transactions.title')}</h1>
+          <p className="text-muted-foreground text-sm font-medium">{filtered.length} {t('transactions.shown')}</p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto" data-tour="add-transaction-desktop">
           <DateRangePicker className="flex-1 sm:flex-none" />
@@ -49,7 +51,7 @@ export default function Transactions() {
             className="gap-1.5 rounded-2xl h-10 px-5 finance-gradient shadow-lg shadow-primary/20 border-0 shrink-0"
           >
             <Plus className="w-5 h-5" />
-            <span className="hidden sm:inline font-semibold">Add</span>
+            <span className="hidden sm:inline font-semibold">{t('common.add')}</span>
           </Button>
         </div>
       </div>
@@ -58,7 +60,7 @@ export default function Transactions() {
         <div className="relative flex-1 group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
           <Input
-            placeholder="Search records..."
+            placeholder={t('transactions.search_placeholder')}
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="pl-11 h-12 rounded-2xl bg-secondary/30 border-0 focus-visible:ring-2 focus-visible:ring-primary/20 font-medium"
@@ -68,15 +70,15 @@ export default function Transactions() {
           <Select value={filterType} onValueChange={v => setFilterType(v as typeof filterType)}>
             <SelectTrigger className="w-full md:w-40 h-12 rounded-2xl bg-secondary/30 border-0 font-semibold min-w-0"><SelectValue /></SelectTrigger>
             <SelectContent className="rounded-2xl border-border/40">
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="income">Income</SelectItem>
-              <SelectItem value="expense">Expense</SelectItem>
+              <SelectItem value="all">{t('transactions.all_types')}</SelectItem>
+              <SelectItem value="income">{t('transactions.income')}</SelectItem>
+              <SelectItem value="expense">{t('transactions.expense')}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={filterCategory} onValueChange={setFilterCategory}>
             <SelectTrigger className="w-full md:min-w-[200px] h-12 rounded-2xl bg-secondary/30 border-0 font-semibold min-w-0"><SelectValue /></SelectTrigger>
             <SelectContent className="rounded-2xl border-border/40">
-              <SelectItem value="all">All Categories</SelectItem>
+              <SelectItem value="all">{t('transactions.all_categories')}</SelectItem>
               {categoryNames.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -254,8 +256,8 @@ export default function Transactions() {
             <div className="w-20 h-20 rounded-3xl bg-secondary/20 flex items-center justify-center mb-4">
               <Search className="w-8 h-8 text-muted-foreground/30" />
             </div>
-            <h3 className="text-lg font-bold text-foreground">No transactions found</h3>
-            <p className="text-sm text-muted-foreground max-w-[240px]">Try adjusting your filters or search terms to find what you're looking for.</p>
+            <h3 className="text-lg font-bold text-foreground">{t('transactions.no_results')}</h3>
+            <p className="text-sm text-muted-foreground max-w-[240px]">{t('transactions.no_results_desc')}</p>
           </motion.div>
         )}
       </div>

@@ -9,8 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 export default function Budgets() {
+  const { t } = useTranslation();
   const { categories, transactions, profile, deleteCategory } = useFinance();
   const { openCategoryDrawer } = useUI();
 
@@ -22,14 +24,14 @@ export default function Budgets() {
       {/* Header */}
       <div className="flex items-center justify-between px-1" data-tour="budgets-header">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-foreground leading-none mb-2">Budgets</h1>
+          <h1 className="text-2xl font-black tracking-tight text-foreground leading-none mb-2">{t('budgets.title')}</h1>
           <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.2em] opacity-70 flex items-center gap-2">
             <Wallet className="w-3 h-3 text-primary" />
-            Strategic Planning
+            {t('budgets.subtitle')}
           </p>
         </div>
         <Button onClick={() => openCategoryDrawer()} data-tour="new-budget" className="rounded-2xl h-12 finance-gradient border-0 px-6 font-bold shadow-lg shadow-primary/20 active:scale-95 transition-all">
-          <Plus className="w-5 h-5 mr-1" /> New
+          <Plus className="w-5 h-5 mr-1" /> {t('budgets.new')}
         </Button>
       </div>
 
@@ -53,7 +55,7 @@ export default function Budgets() {
                 >
                   {overBudget && (
                     <div className="absolute top-0 right-0 px-3 py-1 bg-destructive/10 text-destructive text-[10px] font-black uppercase tracking-widest rounded-bl-xl border-l border-b border-destructive/20">
-                      Limit Exceeded
+                      {t('budgets.limit_exceeded')}
                     </div>
                   )}
 
@@ -66,7 +68,7 @@ export default function Budgets() {
                       <div>
                         <p className="text-base font-black text-foreground tracking-tight">{cat.name}</p>
                         <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
-                          Monthly Allowance
+                          {t('budgets.monthly_allowance')}
                         </p>
                       </div>
                     </div>
@@ -80,10 +82,10 @@ export default function Budgets() {
                     <div className="flex justify-between items-end mb-1 px-1">
                       <p className="text-sm font-black text-foreground leading-none">
                         {formatCurrency(spent, profile.currency)}
-                        <span className="text-[10px] text-muted-foreground font-bold ml-1 opacity-60">spent</span>
+                        <span className="text-[10px] text-muted-foreground font-bold ml-1 opacity-60">{t('budgets.spent')}</span>
                       </p>
                       <p className="text-[10px] font-black uppercase tracking-tighter text-muted-foreground">
-                        Limit: {formatCurrency(cat.budget_limit, profile.currency)}
+                        {t('budgets.limit')}: {formatCurrency(cat.budget_limit, profile.currency)}
                       </p>
                     </div>
 
@@ -109,11 +111,11 @@ export default function Budgets() {
                           "text-[10px] font-black uppercase tracking-widest",
                           overBudget ? "text-destructive" : warning ? "text-orange-500" : "text-primary"
                         )}>
-                          {overBudget ? 'Over Budget' : warning ? 'Near Limit' : 'On Track'}
+                          {overBudget ? t('budgets.over_budget') : warning ? t('budgets.near_limit') : t('budgets.on_track')}
                         </p>
                       </div>
                       <p className="text-[10px] font-black text-muted-foreground/60 italic">
-                        {pct.toFixed(0)}% Utilized
+                        {pct.toFixed(0)}% {t('budgets.utilized')}
                       </p>
                     </div>
                   </div>
@@ -127,17 +129,17 @@ export default function Budgets() {
           <div className="w-16 h-16 rounded-3xl bg-secondary/30 flex items-center justify-center mx-auto mb-4 border border-border/50">
             <Wallet className="w-8 h-8 text-muted-foreground/40" />
           </div>
-          <h3 className="text-lg font-black text-foreground tracking-tight">No Budgets Defined</h3>
-          <p className="text-sm text-muted-foreground font-medium mb-6">Create limits to track your spending habits effectively.</p>
+          <h3 className="text-lg font-black text-foreground tracking-tight">{t('budgets.no_budgets_title')}</h3>
+          <p className="text-sm text-muted-foreground font-medium mb-6">{t('budgets.no_budgets_desc')}</p>
           <Button onClick={() => openCategoryDrawer()} variant="outline" className="rounded-xl font-bold border-primary/20 text-primary hover:bg-primary/5">
-            Get Started
+            {t('budgets.get_started')}
           </Button>
         </div>
       )}
 
       {otherCategories.length > 0 && (
         <div className="space-y-4 px-1">
-          <h2 className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-[0.2em]">Unlimited Categories</h2>
+          <h2 className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-[0.2em]">{t('budgets.unlimited_categories')}</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {otherCategories.map(cat => {
               const CatIcon = getCategoryIcon(cat.name);
@@ -148,7 +150,7 @@ export default function Budgets() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-black text-foreground truncate leading-none mb-1">{cat.name}</p>
-                    <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">No Limit</p>
+                    <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">{t('budgets.no_limit')}</p>
                   </div>
                 </div>
               );

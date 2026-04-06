@@ -155,7 +155,7 @@ export function TransactionDrawer() {
             {type === 'expense' && goals.length > 0 && (
               <section className="space-y-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Link to Savings Goal
+                  {t('transaction_drawer.link_goal')}
                 </h3>
                 <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                   <button
@@ -193,7 +193,7 @@ export function TransactionDrawer() {
               <div className="relative">
                 <AlignLeft className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Note (optional)"
+                  placeholder={t('transaction_drawer.note_placeholder')}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="h-12 rounded-2xl border-border/50 bg-secondary/25 pl-11 text-[15px] font-medium"

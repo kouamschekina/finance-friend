@@ -89,11 +89,11 @@ export function GoalDrawer() {
                         <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                                 <DrawerTitle className="text-lg font-bold tracking-tight pr-2">
-                                    {editingGoalId ? 'Edit Goal' : 'Create New Goal'}
+                                    {editingGoalId ? t('goal.editTitle') : t('goal.createTitle')}
                                 </DrawerTitle>
                                 <p className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5 mt-0.5 uppercase tracking-wider opacity-70">
                                     <Target className="w-3 h-3 text-primary" strokeWidth={2.5} />
-                                    Wealth Generator
+                                    {t('goal.wealth')}
                                 </p>
                             </div>
                             <div className="flex items-center gap-1">
@@ -129,7 +129,7 @@ export function GoalDrawer() {
                         <section className="space-y-4">
                             <div className="space-y-2">
                                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                    Goal Identity
+                                    {t('goal.identity')}
                                 </label>
                                 <div className="flex gap-2">
                                     <div className="shrink-0">
@@ -158,7 +158,7 @@ export function GoalDrawer() {
                                     <div className="relative flex-1">
                                         <AlignLeft className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                                         <Input
-                                            placeholder="e.g. New Car, Dream Wedding"
+                                            placeholder={t('goal.namePlaceholder')}
                                             value={formName}
                                             onChange={e => setFormName(e.target.value)}
                                             className="h-12 rounded-2xl border-border/50 bg-secondary/25 pl-11 text-[14px] font-semibold"
@@ -169,7 +169,7 @@ export function GoalDrawer() {
 
                             <div className="space-y-2">
                                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                    Target Date (Optional)
+                                    {t('goal.targetDate')}
                                 </label>
                                 <Popover>
                                     <PopoverTrigger asChild>
@@ -181,7 +181,7 @@ export function GoalDrawer() {
                                             )}
                                         >
                                             <CalendarIcon className="h-5 w-5 text-muted-foreground" strokeWidth={2} />
-                                            {formDeadline ? format(formDeadline, "PPP") : "Pick a deadline"}
+                                            {formDeadline ? format(formDeadline, "PPP") : t('goal.pickDeadline')}
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-auto p-0 rounded-2xl border-border/40 bg-background shadow-2xl" align="start">
@@ -205,7 +205,7 @@ export function GoalDrawer() {
                             disabled={!formName.trim() || parseFloat(targetAmount) <= 0}
                             className="h-14 w-full rounded-2xl text-base font-bold finance-gradient border-0 shadow-lg shadow-primary/20 disabled:opacity-50 transition-all active:scale-[0.98]"
                         >
-                            {editingGoalId ? 'Save Goal Changes' : 'Launch New Goal'}
+                            {editingGoalId ? t('goal.saveChanges') : t('goal.launch')}
                         </Button>
                     </DrawerFooter>
                 </div>

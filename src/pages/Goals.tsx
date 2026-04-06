@@ -8,8 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useTranslation } from 'react-i18next';
 
 export default function Goals() {
+  const { t } = useTranslation();
   const { goals, profile, deleteGoal } = useFinance();
   const { openGoalDrawer } = useUI();
 
@@ -17,11 +19,11 @@ export default function Goals() {
     <div className="space-y-5 animate-fade-in min-w-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" data-tour="goals-header">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Savings goals</h1>
-          <p className="text-muted-foreground text-sm">Track progress toward targets</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{t('goals.title')}</h1>
+          <p className="text-muted-foreground text-sm">{t('goals.subtitle')}</p>
         </div>
         <Button onClick={() => openGoalDrawer()} data-tour="new-goal" size="sm" className="gap-1.5 rounded-xl h-11 finance-gradient border-0 px-5 w-full sm:w-auto shrink-0 font-bold shadow-lg shadow-primary/20">
-          <Plus className="w-5 h-5" /> New goal
+          <Plus className="w-5 h-5" /> {t('goals.new_goal')}
         </Button>
       </div>
 
@@ -30,7 +32,7 @@ export default function Goals() {
           <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
             <Target className="w-8 h-8 text-primary" />
           </div>
-          <p className="text-muted-foreground text-sm">No goals yet. Create one to start tracking!</p>
+          <p className="text-muted-foreground text-sm">{t('goals.no_goals')}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -51,7 +53,7 @@ export default function Goals() {
                     <div>
                       <p className="font-semibold text-foreground">{goal.name}</p>
                       <p className="text-[11px] text-muted-foreground font-medium">
-                        {formatCurrency(goal.current_amount, profile.currency)} of {formatCurrency(goal.target_amount, profile.currency)}
+                        {formatCurrency(goal.current_amount, profile.currency)} {t('goals.of')} {formatCurrency(goal.target_amount, profile.currency)}
                       </p>
                     </div>
                   </div>
@@ -64,11 +66,11 @@ export default function Goals() {
                   <div className={`progress-bar-fill ${completed ? 'bg-primary shadow-[0_0_8px_rgba(var(--primary-rgb),0.5)]' : 'bg-info'}`} style={{ width: `${pct}%` }} />
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium">
-                  <span className={completed ? 'text-primary font-bold' : ''}>{pct.toFixed(0)}% complete</span>
+                  <span className={completed ? 'text-primary font-bold' : ''}>{pct.toFixed(0)}% {t('goals.complete')}</span>
                   {completed ? (
-                    <span className="text-primary font-bold">Goal reached! 🔥</span>
+                    <span className="text-primary font-bold">{t('goals.goal_reached')}</span>
                   ) : (
-                    <span>{formatCurrency(remaining, profile.currency)} to go{daysLeft !== null && ` · ${daysLeft} days`}</span>
+                    <span>{formatCurrency(remaining, profile.currency)} {t('goals.to_go')}{daysLeft !== null && ` · ${daysLeft} ${t('goals.days')}`}</span>
                   )}
                 </div>
               </div>

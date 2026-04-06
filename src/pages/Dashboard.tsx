@@ -123,22 +123,22 @@ export default function Dashboard() {
 
   const insights = useMemo(() => {
     const result: { text: string; type: 'success' | 'warning' | 'info' }[] = [];
-    if (expenseChange > 10) result.push({ text: `Your spending is up ${Math.abs(expenseChange).toFixed(0)}% compared to the previous period.`, type: 'warning' });
-    else if (expenseChange < -5) result.push({ text: `Great job! You spent ${Math.abs(expenseChange).toFixed(0)}% less than the previous period.`, type: 'success' });
+    if (expenseChange > 10) result.push({ text: t('dashboard.insight_spending_up', { pct: Math.abs(expenseChange).toFixed(0) }), type: 'warning' });
+    else if (expenseChange < -5) result.push({ text: t('dashboard.insight_spending_down', { pct: Math.abs(expenseChange).toFixed(0) }), type: 'success' });
 
-    if (savingsRate > 20) result.push({ text: `Excellent savings rate of ${savingsRate.toFixed(0)}%! Keep it up.`, type: 'success' });
-    else if (savingsRate < 10 && savingsRate >= 0) result.push({ text: `Your savings rate is ${savingsRate.toFixed(0)}%. Try to aim for at least 20%.`, type: 'info' });
+    if (savingsRate > 20) result.push({ text: t('dashboard.insight_savings_excellent', { pct: savingsRate.toFixed(0) }), type: 'success' });
+    else if (savingsRate < 10 && savingsRate >= 0) result.push({ text: t('dashboard.insight_savings_low', { pct: savingsRate.toFixed(0) }), type: 'info' });
 
     const topCategory = pieData[0];
-    if (topCategory) result.push({ text: `${topCategory.name} is your biggest expense at ${formatCurrency(topCategory.value, profile.currency)}.`, type: 'info' });
+    if (topCategory) result.push({ text: t('dashboard.insight_top_category', { name: topCategory.name, amount: formatCurrency(topCategory.value, profile.currency) }), type: 'info' });
 
     categories.filter(c => c.budget_limit > 0).forEach(c => {
       const spent = getCategorySpending(transactions, c.name, dateRange);
       const pct = (spent / c.budget_limit) * 100;
-      if (pct >= 100) result.push({ text: `You've exceeded your ${c.name} budget for this period!`, type: 'warning' });
-      else if (pct >= 80) result.push({ text: `You're at ${pct.toFixed(0)}% of your ${c.name} budget.`, type: 'warning' });
+      if (pct >= 100) result.push({ text: t('dashboard.insight_budget_exceeded', { name: c.name }), type: 'warning' });
+      else if (pct >= 80) result.push({ text: t('dashboard.insight_budget_warning', { name: c.name, pct: pct.toFixed(0) }), type: 'warning' });
     });
-    return result.length ? result : [{ text: 'Your finances look healthy for this period!', type: 'success' as const }];
+    return result.length ? result : [{ text: t('dashboard.insight_healthy'), type: 'success' as const }];
   }, [expenseChange, savingsRate, pieData, categories, transactions, profile.currency, dateRange]);
 
   const currency = profile.currency;
@@ -195,7 +195,7 @@ export default function Dashboard() {
       {/* Charts */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4">
         <div className="finance-card p-4 sm:p-5 min-w-0" data-tour="monthly-summary">
-          <h3 className="font-semibold text-foreground text-sm mb-3">Spending by category</h3>
+          <h3 className="font-semibold text-foreground text-sm mb-3">{t('dashboard.spending_by_category')}</h3>
           {pieData.length > 0 ? (
             <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-center">
               <div className="mx-auto w-full max-w-[200px] h-[180px] sm:mx-0 sm:w-1/2 sm:max-w-none shrink-0">
@@ -232,12 +232,12 @@ export default function Dashboard() {
               </div>
             </div>
           ) : (
-            <p className="text-muted-foreground text-sm py-8 text-center">No expenses this month</p>
+            <p className="text-muted-foreground text-sm py-8 text-center">{t('dashboard.no_expenses_month')}</p>
           )}
         </div>
 
         <div className="finance-card p-4 sm:p-5 min-w-0 overflow-hidden">
-          <h3 className="font-semibold text-foreground text-sm mb-3">Income vs expenses</h3>
+          <h3 className="font-semibold text-foreground text-sm mb-3">{t('dashboard.income_vs_expenses')}</h3>
           <div className="h-[200px] w-full min-w-0 sm:h-[180px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={barData} barGap={4} margin={{ left: -8, right: 4 }}>
@@ -252,7 +252,7 @@ export default function Dashboard() {
         </div>
 
         <div className="finance-card p-4 sm:p-5 lg:col-span-2 min-w-0 overflow-hidden">
-          <h3 className="font-semibold text-foreground text-sm mb-3">Daily spending</h3>
+          <h3 className="font-semibold text-foreground text-sm mb-3">{t('dashboard.daily_spending')}</h3>
           {lineData.length > 0 ? (
             <div className="h-[200px] w-full min-w-0 sm:h-[180px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -266,7 +266,7 @@ export default function Dashboard() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-muted-foreground text-sm py-8 text-center">No data yet</p>
+            <p className="text-muted-foreground text-sm py-8 text-center">{t('dashboard.no_data_yet')}</p>
           )}
         </div>
       </div>
@@ -277,7 +277,7 @@ export default function Dashboard() {
           <div className="w-7 h-7 rounded-lg bg-warning/15 flex items-center justify-center">
             <Lightbulb className="w-4 h-4 text-warning" />
           </div>
-          <h3 className="font-semibold text-foreground text-sm">Smart Insights</h3>
+          <h3 className="font-semibold text-foreground text-sm">{t('dashboard.smart_insights')}</h3>
         </div>
         <div className="space-y-2">
           {insights.map((insight, i) => (

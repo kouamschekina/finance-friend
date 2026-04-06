@@ -53,7 +53,7 @@ export function SettingsDrawer() {
 
   const handleSaveApiKey = () => {
     localStorage.setItem(GROQ_KEY, apiKey.trim());
-    toast.success('API key saved on this device');
+    toast.success(t('settings.apiKeySaved'));
   };
 
   return (

@@ -4,6 +4,71 @@ import {
   loadState, saveState, clearLocalState, formatCurrency, DEFAULT_PROFILE,
   DEFAULT_CATEGORIES, getCategorySpending,
 } from '@/lib/finance-store';
+
+// Helper function to ensure all default categories exist for the user
+async function ensureDefaultCategories(userId: string): Promise<void> {
+  const { data: existingCategories } = await supabase
+    .from('categories')
+    .select('name')
+    .eq('user_id', userId);
+
+  const existingNames = new Set((existingCategories as any[] || []).map(c => c.name));
+  
+  // Find missing default categories
+  const missingCategories = DEFAULT_CATEGORIES.filter(
+    cat => !existingNames.has(cat.name)
+  );
+
+  // Insert missing categories one by one with new UUIDs
+  for (const cat of missingCategories) {
+    try {
+      await (supabase as any)
+        .from('categories')
+        .insert({
+          // Generate new UUID instead of using fixed ID
+          user_id: userId,
+          name: cat.name,
+          icon: cat.icon,
+          color: cat.color,
+          budget_limit: cat.budget_limit
+        });
+    } catch (error: any) {
+      // Ignore duplicate key errors
+      if (error.code !== '23505' && error.code !== '42501') {
+        console.error('Error adding category:', error);
+      }
+    }
+  }
+}
+
+// Helper function to merge user categories with default categories
+function mergeCategoriesWithDefaults(userCategories: Category[], userId: string): Category[] {
+  const merged = [...DEFAULT_CATEGORIES];
+  
+  // Create a map of user categories by name for quick lookup
+  const userCategoryMap = new Map(userCategories.map(cat => [cat.name, cat]));
+  
+  // Merge user categories with defaults, preserving user's budget limits
+  DEFAULT_CATEGORIES.forEach(defaultCat => {
+    const userCat = userCategoryMap.get(defaultCat.name);
+    if (userCat) {
+      // Use user's category data (preserves budget_limit and any customizations)
+      const index = merged.findIndex(cat => cat.id === defaultCat.id);
+      if (index !== -1) {
+        merged[index] = userCat;
+      }
+    }
+  });
+  
+  // Add any additional categories user has that aren't in defaults
+  userCategories.forEach(userCat => {
+    if (!DEFAULT_CATEGORIES.find(dc => dc.name === userCat.name)) {
+      merged.push(userCat);
+    }
+  });
+  
+  return merged;
+}
 import { toast } from '@/components/ui/sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
@@ -97,6 +162,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
     setLoading(true);
     try {
+      // Ensure all default categories exist for this user
+      await ensureDefaultCategories(user.id);
+
       const [
         { data: transactions },
         { data: categories },
@@ -137,7 +205,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         return {
           ...s,
           transactions: (transactions as Transaction[]) || [],
-          categories: (categories && (categories as Category[]).length > 0) ? (categories as Category[]) : DEFAULT_CATEGORIES,
+          // Always ensure all default categories are available, merge with existing ones
+          categories: mergeCategoriesWithDefaults((categories as Category[]) || [], user.id),
           goals: (goals as SavingsGoal[]) || [],
           notifications: [...missedLocals, ...currentNotifs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
           profile: (profile as UserProfile) || DEFAULT_PROFILE
