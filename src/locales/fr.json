@@ -215,7 +215,9 @@
             "disabled": "Rappels désactivés",
             "permissionDenied": "Notifications bloquées — activez-les dans les paramètres du navigateur",
             "unsupported": "Notifications non supportées sur cet appareil",
-            "activeInfo": "Vous recevrez des rappels à 8h00, 13h00 et 20h00 chaque jour"
+            "activeInfo": "Vous recevrez des rappels à 8h00, 13h00 et 20h00 chaque jour",
+            "allowButton": "Autoriser les Notifications",
+            "deniedHelp": "Les notifications sont bloquées. Allez dans les paramètres du navigateur → Paramètres du site → Notifications et autorisez ce site."
         }
     }
 }

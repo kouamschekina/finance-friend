@@ -187,7 +187,9 @@ export function SettingsDrawer() {
                 <Bell className="h-3.5 w-3.5" strokeWidth={2.2} />
                 {t('settings.reminders.title')}
               </p>
-              <div className="rounded-2xl border border-border/50 bg-card p-4 space-y-3">
+              <div className="rounded-2xl border border-border/50 bg-card p-4 space-y-4">
+
+                {/* Status row */}
                 <div className="flex items-center justify-between">
                   <div className="min-w-0 flex-1 pr-4">
                     <p className="text-sm font-semibold">{t('settings.reminders.dailyReminders')}</p>
@@ -196,21 +198,43 @@ export function SettingsDrawer() {
                         ? t('settings.reminders.permissionDenied')
                         : status === 'unsupported'
                         ? t('settings.reminders.unsupported')
+                        : status === 'granted' && isEnabled
+                        ? t('settings.reminders.activeInfo')
                         : t('settings.reminders.subtitle')}
                     </p>
                   </div>
                   <Switch
-                    checked={isEnabled}
+                    checked={isEnabled && status === 'granted'}
                     onCheckedChange={handleToggleReminders}
                     disabled={status === 'denied' || status === 'unsupported' || status === 'loading'}
                     aria-label={t('settings.reminders.dailyReminders')}
                   />
                 </div>
-                {isEnabled && status === 'granted' && (
-                  <p className="text-xs text-muted-foreground border-t border-border/40 pt-3">
-                    {t('settings.reminders.activeInfo')}
-                  </p>
+
+                {/* Allow button — shown when not yet granted */}
+                {status !== 'granted' && status !== 'denied' && status !== 'unsupported' && (
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      const ok = await subscribe();
+                      if (ok) toast.success(t('settings.reminders.enabled'));
+                      else toast.error(t('settings.reminders.permissionDenied'));
+                    }}
+                    disabled={status === 'loading'}
+                    className="w-full h-11 rounded-xl font-semibold finance-gradient border-0 gap-2"
+                  >
+                    <Bell className="h-4 w-4" />
+                    {status === 'loading' ? 'Enabling...' : t('settings.reminders.allowButton')}
+                  </Button>
                 )}
+
+                {/* Denied state — guide user to browser settings */}
+                {status === 'denied' && (
+                  <div className="rounded-xl bg-destructive/10 border border-destructive/20 px-3 py-2.5 text-xs text-destructive">
+                    {t('settings.reminders.deniedHelp')}
+                  </div>
+                )}
+
               </div>
             </section>
 

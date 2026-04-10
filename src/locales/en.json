@@ -215,7 +215,9 @@
             "disabled": "Reminders disabled",
             "permissionDenied": "Notifications blocked — enable them in browser settings",
             "unsupported": "Notifications not supported on this device",
-            "activeInfo": "You'll receive reminders at 8:00 AM, 1:00 PM and 8:00 PM every day"
+            "activeInfo": "You'll receive reminders at 8:00 AM, 1:00 PM and 8:00 PM every day",
+            "allowButton": "Allow Notifications",
+            "deniedHelp": "Notifications are blocked. Go to your browser settings → Site Settings → Notifications and allow this site."
         }
     }
 }
