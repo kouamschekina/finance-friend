@@ -185,29 +185,29 @@ export function SettingsDrawer() {
             <section className="mb-8">
               <p className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 <Bell className="h-3.5 w-3.5" strokeWidth={2.2} />
-                {t('settings.reminders.title')}
+                Reminders
               </p>
               <div className="rounded-2xl border border-border/50 bg-card p-4 space-y-4">
 
                 {/* Status row */}
                 <div className="flex items-center justify-between">
                   <div className="min-w-0 flex-1 pr-4">
-                    <p className="text-sm font-semibold">{t('settings.reminders.dailyReminders')}</p>
+                    <p className="text-sm font-semibold">Daily Transaction Reminders</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {status === 'denied'
-                        ? t('settings.reminders.permissionDenied')
+                        ? 'Notifications blocked — enable them in browser settings'
                         : status === 'unsupported'
-                        ? t('settings.reminders.unsupported')
+                        ? 'Notifications not supported on this device'
                         : status === 'granted' && isEnabled
-                        ? t('settings.reminders.activeInfo')
-                        : t('settings.reminders.subtitle')}
+                        ? "You'll be notified at 8 AM, 12 PM, 1 PM and 8 PM every day"
+                        : 'Get notified to log your transactions every day'}
                     </p>
                   </div>
                   <Switch
                     checked={isEnabled && status === 'granted'}
                     onCheckedChange={handleToggleReminders}
                     disabled={status === 'denied' || status === 'unsupported' || status === 'loading'}
-                    aria-label={t('settings.reminders.dailyReminders')}
+                    aria-label="Daily Transaction Reminders"
                   />
                 </div>
 
@@ -217,21 +217,21 @@ export function SettingsDrawer() {
                     type="button"
                     onClick={async () => {
                       const ok = await subscribe();
-                      if (ok) toast.success(t('settings.reminders.enabled'));
-                      else toast.error(t('settings.reminders.permissionDenied'));
+                      if (ok) toast.success('Reminders enabled');
+                      else toast.error('Could not enable notifications');
                     }}
                     disabled={status === 'loading'}
                     className="w-full h-11 rounded-xl font-semibold finance-gradient border-0 gap-2"
                   >
                     <Bell className="h-4 w-4" />
-                    {status === 'loading' ? 'Enabling...' : t('settings.reminders.allowButton')}
+                    {status === 'loading' ? 'Enabling...' : 'Allow Notifications'}
                   </Button>
                 )}
 
                 {/* Denied state — guide user to browser settings */}
                 {status === 'denied' && (
                   <div className="rounded-xl bg-destructive/10 border border-destructive/20 px-3 py-2.5 text-xs text-destructive">
-                    {t('settings.reminders.deniedHelp')}
+                    Notifications are blocked. Go to browser Settings → Site Settings → Notifications and allow this site.
                   </div>
                 )}
 

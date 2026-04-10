@@ -36,6 +36,17 @@ export type MessageKey =
   | 'settings.save'
   | 'settings.openChat'
   | 'settings.personalInfo'
+  | 'settings.apiKeySaved'
+  | 'settings.reminders.title'
+  | 'settings.reminders.dailyReminders'
+  | 'settings.reminders.subtitle'
+  | 'settings.reminders.enabled'
+  | 'settings.reminders.disabled'
+  | 'settings.reminders.permissionDenied'
+  | 'settings.reminders.unsupported'
+  | 'settings.reminders.activeInfo'
+  | 'settings.reminders.allowButton'
+  | 'settings.reminders.deniedHelp'
   | 'transaction.new'
   | 'transaction.edit'
   | 'transaction.expense'
@@ -97,6 +108,17 @@ const catalog: Record<LocaleCode, Record<MessageKey, string>> = {
     'settings.save': 'Save',
     'settings.openChat': 'Open chat',
     'settings.personalInfo': 'Personal information',
+    'settings.apiKeySaved': 'API key saved',
+    'settings.reminders.title': 'Reminders',
+    'settings.reminders.dailyReminders': 'Daily Transaction Reminders',
+    'settings.reminders.subtitle': 'Get notified 3 times a day to log your transactions',
+    'settings.reminders.enabled': 'Reminders enabled',
+    'settings.reminders.disabled': 'Reminders disabled',
+    'settings.reminders.permissionDenied': 'Notifications blocked — enable them in browser settings',
+    'settings.reminders.unsupported': 'Notifications not supported on this device',
+    'settings.reminders.activeInfo': 'You\'ll be notified at 8 AM, 12 PM, 1 PM and 8 PM every day',
+    'settings.reminders.allowButton': 'Allow Notifications',
+    'settings.reminders.deniedHelp': 'Notifications are blocked. Go to browser Settings → Site Settings → Notifications and allow this site.',
     'transaction.new': 'New entry',
     'transaction.edit': 'Edit entry',
     'transaction.expense': 'Expense',
@@ -157,6 +179,17 @@ const catalog: Record<LocaleCode, Record<MessageKey, string>> = {
     'settings.save': 'Enregistrer',
     'settings.openChat': 'Ouvrir le chat',
     'settings.personalInfo': 'Informations personnelles',
+    'settings.apiKeySaved': 'Clé API enregistrée',
+    'settings.reminders.title': 'Rappels',
+    'settings.reminders.dailyReminders': 'Rappels de Transactions Quotidiens',
+    'settings.reminders.subtitle': 'Recevez 3 notifications par jour pour enregistrer vos transactions',
+    'settings.reminders.enabled': 'Rappels activés',
+    'settings.reminders.disabled': 'Rappels désactivés',
+    'settings.reminders.permissionDenied': 'Notifications bloquées — activez-les dans les paramètres du navigateur',
+    'settings.reminders.unsupported': 'Notifications non supportées sur cet appareil',
+    'settings.reminders.activeInfo': 'Vous recevrez des rappels à 8h, 12h, 13h et 20h chaque jour',
+    'settings.reminders.allowButton': 'Autoriser les Notifications',
+    'settings.reminders.deniedHelp': 'Notifications bloquées. Allez dans Paramètres du navigateur → Paramètres du site → Notifications et autorisez ce site.',
     'transaction.new': 'Nouvelle entrée',
     'transaction.edit': 'Modifier',
     'transaction.expense': 'Dépense',

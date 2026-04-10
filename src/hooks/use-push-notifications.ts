@@ -16,14 +16,12 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 export function usePushNotifications() {
   const [status, setStatus] = useState<PushStatus>('idle');
   const [isEnabled, setIsEnabled] = useState(() => {
-    // Consider enabled if permission already granted (auto-subscribed on first visit)
     if (typeof window !== 'undefined' && 'Notification' in window) {
       return Notification.permission === 'granted' || localStorage.getItem(STORAGE_KEY) === 'true';
     }
     return localStorage.getItem(STORAGE_KEY) === 'true';
   });
 
-  // Check current permission state on mount
   useEffect(() => {
     if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
       setStatus('unsupported');
@@ -34,58 +32,74 @@ export function usePushNotifications() {
   }, [isEnabled]);
 
   const subscribe = useCallback(async (): Promise<boolean> => {
+    console.log('[Push] Starting subscribe, VAPID key present:', !!VAPID_PUBLIC_KEY, 'length:', VAPID_PUBLIC_KEY?.length);
     if (!VAPID_PUBLIC_KEY) {
-      console.error('VITE_VAPID_PUBLIC_KEY is not set in .env');
+      console.error('[Push] VITE_VAPID_PUBLIC_KEY is not set');
+      setStatus('idle');
       return false;
     }
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      console.error('[Push] ServiceWorker or PushManager not supported');
+      setStatus('unsupported');
+      return false;
+    }
 
     setStatus('loading');
     try {
-      // Request notification permission
+      console.log('[Push] Requesting notification permission...');
       const permission = await Notification.requestPermission();
+      console.log('[Push] Permission result:', permission);
       if (permission !== 'granted') {
         setStatus('denied');
         return false;
       }
 
-      // Get the service worker registration
+      console.log('[Push] Waiting for SW ready...');
       const reg = await navigator.serviceWorker.ready;
+      console.log('[Push] SW ready, scope:', reg.scope);
 
-      // Check if already subscribed
       let pushSub = await reg.pushManager.getSubscription();
+      console.log('[Push] Existing subscription:', !!pushSub);
 
-      // If not subscribed, create a new subscription
       if (!pushSub) {
+        console.log('[Push] Creating new push subscription...');
         pushSub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
         });
+        console.log('[Push] Push subscription created:', pushSub.endpoint);
       }
 
-      // Save subscription to Supabase
       const subJson = pushSub.toJSON();
       const keys = subJson.keys as { p256dh: string; auth: string };
 
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log('[Push] User:', user?.id ?? 'guest');
+
+      const row: Record<string, string> = {
+        endpoint: pushSub.endpoint,
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+      };
+      if (user?.id) row.user_id = user.id;
+
+      console.log('[Push] Saving to Supabase...');
       const { error } = await (supabase as any)
         .from('push_subscriptions')
-        .upsert(
-          {
-            endpoint: pushSub.endpoint,
-            p256dh: keys.p256dh,
-            auth: keys.auth,
-          },
-          { onConflict: 'endpoint' }
-        );
+        .upsert(row, { onConflict: 'endpoint' });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[Push] Supabase error:', JSON.stringify(error));
+        throw error;
+      }
 
       localStorage.setItem(STORAGE_KEY, 'true');
       setIsEnabled(true);
       setStatus('granted');
+      console.log('[Push] ✅ Subscribed successfully');
       return true;
     } catch (e) {
-      console.error('Push subscription failed:', e);
+      console.error('[Push] Subscribe failed:', e);
       setStatus('idle');
       return false;
     }
@@ -96,7 +110,6 @@ export function usePushNotifications() {
       const reg = await navigator.serviceWorker.ready;
       const pushSub = await reg.pushManager.getSubscription();
       if (pushSub) {
-        // Remove from Supabase
         await (supabase as any)
           .from('push_subscriptions')
           .delete()
@@ -104,7 +117,7 @@ export function usePushNotifications() {
         await pushSub.unsubscribe();
       }
     } catch (e) {
-      console.error('Unsubscribe failed:', e);
+      console.error('[Push] Unsubscribe failed:', e);
     } finally {
       localStorage.removeItem(STORAGE_KEY);
       setIsEnabled(false);
