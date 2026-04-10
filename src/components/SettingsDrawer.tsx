@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import {
   X,
@@ -21,6 +22,7 @@ import {
   Globe,
   MessageCircle,
   Check,
+  Bell,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
@@ -35,6 +37,7 @@ import {
   LOCALE_LABELS,
   type LocaleCode,
 } from '@/lib/i18n';
+import { usePushNotifications } from '@/hooks/use-push-notifications';
 
 const GROQ_KEY = 'GROQ_API_KEY';
 
@@ -44,6 +47,7 @@ export function SettingsDrawer() {
   const { theme, setTheme } = useTheme();
   const { locale, setLocale, t } = useLocale();
   const [apiKey, setApiKey] = useState('');
+  const { status, isEnabled, subscribe, unsubscribe } = usePushNotifications();
 
   useEffect(() => {
     if (isSettingsDrawerOpen) {
@@ -54,6 +58,17 @@ export function SettingsDrawer() {
   const handleSaveApiKey = () => {
     localStorage.setItem(GROQ_KEY, apiKey.trim());
     toast.success(t('settings.apiKeySaved'));
+  };
+
+  const handleToggleReminders = async (enabled: boolean) => {
+    if (enabled) {
+      const ok = await subscribe();
+      if (ok) toast.success(t('settings.reminders.enabled'));
+      else if (status === 'denied') toast.error(t('settings.reminders.permissionDenied'));
+    } else {
+      await unsubscribe();
+      toast.success(t('settings.reminders.disabled'));
+    }
   };
 
   return (
@@ -163,6 +178,39 @@ export function SettingsDrawer() {
                     </button>
                   );
                 })}
+              </div>
+            </section>
+
+            {/* Daily Reminders */}
+            <section className="mb-8">
+              <p className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <Bell className="h-3.5 w-3.5" strokeWidth={2.2} />
+                {t('settings.reminders.title')}
+              </p>
+              <div className="rounded-2xl border border-border/50 bg-card p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 flex-1 pr-4">
+                    <p className="text-sm font-semibold">{t('settings.reminders.dailyReminders')}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {status === 'denied'
+                        ? t('settings.reminders.permissionDenied')
+                        : status === 'unsupported'
+                        ? t('settings.reminders.unsupported')
+                        : t('settings.reminders.subtitle')}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={isEnabled}
+                    onCheckedChange={handleToggleReminders}
+                    disabled={status === 'denied' || status === 'unsupported' || status === 'loading'}
+                    aria-label={t('settings.reminders.dailyReminders')}
+                  />
+                </div>
+                {isEnabled && status === 'granted' && (
+                  <p className="text-xs text-muted-foreground border-t border-border/40 pt-3">
+                    {t('settings.reminders.activeInfo')}
+                  </p>
+                )}
               </div>
             </section>
 

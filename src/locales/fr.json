@@ -195,5 +195,27 @@
         "link_goal": "Lier à un Objectif d'Épargne",
         "note_placeholder": "Note (optionnel)",
         "payment": "Paiement"
+    },
+    "settings": {
+        "title": "Réglages",
+        "account": "Compte",
+        "personalInfo": "Informations personnelles",
+        "appearance": "Apparence",
+        "language": "Langue",
+        "advisor": "Conseiller IA",
+        "openChat": "Ouvrir le Chat",
+        "groqKey": "Clé API Groq",
+        "save": "Enregistrer",
+        "apiKeySaved": "Clé API enregistrée",
+        "reminders": {
+            "title": "Rappels",
+            "dailyReminders": "Rappels de Transactions Quotidiens",
+            "subtitle": "Recevez 3 notifications par jour pour enregistrer vos transactions",
+            "enabled": "Rappels activés",
+            "disabled": "Rappels désactivés",
+            "permissionDenied": "Notifications bloquées — activez-les dans les paramètres du navigateur",
+            "unsupported": "Notifications non supportées sur cet appareil",
+            "activeInfo": "Vous recevrez des rappels à 8h00, 13h00 et 20h00 chaque jour"
+        }
     }
 }

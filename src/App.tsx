@@ -18,6 +18,7 @@ import Profile from "./pages/Profile";
 import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
 import { InstallPWA } from "@/components/InstallPWA";
+import { AutoPushPrompt } from "@/components/AutoPushPrompt";
 import { Landing } from "./pages/Landing";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -66,6 +67,7 @@ const App = () => (
             <FinanceProvider>
               <UIProvider>
                 <InstallPWA />
+                <AutoPushPrompt />
                 <BrowserRouter>
                   <AppContent />
                 </BrowserRouter>

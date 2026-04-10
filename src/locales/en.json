@@ -195,5 +195,27 @@
         "link_goal": "Link to Savings Goal",
         "note_placeholder": "Note (optional)",
         "payment": "Payment"
+    },
+    "settings": {
+        "title": "Settings",
+        "account": "Account",
+        "personalInfo": "Personal information",
+        "appearance": "Appearance",
+        "language": "Language",
+        "advisor": "AI Advisor",
+        "openChat": "Open Chat",
+        "groqKey": "Groq API Key",
+        "save": "Save",
+        "apiKeySaved": "API key saved",
+        "reminders": {
+            "title": "Reminders",
+            "dailyReminders": "Daily Transaction Reminders",
+            "subtitle": "Get notified 3 times a day to log your transactions",
+            "enabled": "Reminders enabled",
+            "disabled": "Reminders disabled",
+            "permissionDenied": "Notifications blocked — enable them in browser settings",
+            "unsupported": "Notifications not supported on this device",
+            "activeInfo": "You'll receive reminders at 8:00 AM, 1:00 PM and 8:00 PM every day"
+        }
     }
 }
