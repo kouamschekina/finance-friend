@@ -1,9 +1,12 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import {
   FinanceState, Transaction, Category, SavingsGoal, UserProfile, Notification,
   loadState, saveState, clearLocalState, formatCurrency, DEFAULT_PROFILE,
   DEFAULT_CATEGORIES, getCategorySpending,
 } from '@/lib/finance-store';
+import {
+  enqueue, loadQueue, dequeue, QueuedOperation,
+} from '@/lib/offline-queue';
 
 // Helper function to ensure all default categories exist for the user
 async function ensureDefaultCategories(userId: string): Promise<void> {
@@ -89,6 +92,10 @@ interface FinanceContextType extends FinanceState {
   setDateRange: (range: { from: string; to: string }) => void;
   completeOnboarding: () => Promise<void>;
   loading: boolean;
+  /** Number of operations waiting to be synced to the server */
+  pendingSyncCount: number;
+  /** True while flushing the offline queue */
+  syncing: boolean;
 }
 
 const FinanceContext = createContext<FinanceContextType | null>(null);
@@ -97,6 +104,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [state, setState] = useState<FinanceState>(loadState);
   const [loading, setLoading] = useState(false);
+  const [pendingSyncCount, setPendingSyncCount] = useState(() => loadQueue().length);
+  const [syncing, setSyncing] = useState(false);
+  const isSyncing = useRef(false);
 
   const createNotification = useCallback(async (n: Omit<Notification, 'id' | 'read' | 'created_at'>) => {
     const newNLocal: Notification = {
@@ -160,6 +170,11 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   const fetchData = useCallback(async () => {
     if (!user) return;
+
+    // If offline, skip the network entirely — use whatever is in state (already
+    // loaded from localStorage on mount). Don't set loading or wipe state.
+    if (!navigator.onLine) return;
+
     setLoading(true);
     try {
       // Ensure all default categories exist for this user
@@ -193,19 +208,15 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       }
 
       setState(s => {
-        // If the notifications table errors or is missing, keep the local ones.
-        // Also keep local ones that haven't been synced back if we need to.
         const fetchedNotifs = (!notifRes.error && notifRes.data) ? (notifRes.data as Notification[]) : null;
         const currentNotifs = fetchedNotifs !== null ? fetchedNotifs : s.notifications;
 
-        // deduplicate any missing local ones (random IDs vs uuid)
         const serverTitles = new Set(currentNotifs.map(n => n.title + n.message));
         const missedLocals = s.notifications.filter(n => n.id.length < 20 && !serverTitles.has(n.title + n.message));
 
         return {
           ...s,
           transactions: (transactions as Transaction[]) || [],
-          // Always ensure all default categories are available, merge with existing ones
           categories: mergeCategoriesWithDefaults((categories as Category[]) || [], user.id),
           goals: (goals as SavingsGoal[]) || [],
           notifications: [...missedLocals, ...currentNotifs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
@@ -213,11 +224,15 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         };
       });
     } catch (error) {
+      // Network error while online — keep existing state (localStorage data still visible)
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
   }, [user, createNotification]);
+
+  // Keep ref in sync so flushQueue can call fetchData without circular deps
+  useEffect(() => { fetchDataRef.current = fetchData; }, [fetchData]);
 
   const updateGoalProgress = useCallback(async (goalId: string) => {
     try {
@@ -288,6 +303,21 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     cleanupOldData();
 
     if (user) {
+      // Always load from localStorage first so the app is usable immediately,
+      // even offline. Then try to sync from the server if we have connectivity.
+      const localData = loadState();
+      if (localData.transactions?.length || localData.goals?.length) {
+        setState(s => ({
+          ...s,
+          ...localData,
+          transactions: localData.transactions || [],
+          categories: mergeCategoriesWithDefaults(localData.categories || [], user.id),
+          goals: localData.goals || [],
+          notifications: localData.notifications || [],
+          profile: localData.profile || DEFAULT_PROFILE,
+        }));
+      }
+      // fetchData is a no-op when offline, so this is safe to call always
       fetchData();
     } else {
       const localData = loadState();
@@ -304,14 +334,159 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   }, [user, fetchData]);
 
   useEffect(() => {
-    if (!user) saveState(state);
-  }, [state, user]);
+    // Always persist state to localStorage — this is what powers offline mode
+    saveState(state);
+  }, [state]);
+
+  const fetchDataRef = useRef<() => Promise<void>>();
+
+  /** Execute a single queued operation against Supabase */
+  const executeQueuedOp = useCallback(async (op: QueuedOperation, idMap: Record<string, string>) => {
+    const resolveId = (id: string) => idMap[id] ?? id;
+
+    switch (op.type) {
+      case 'addTransaction': {
+        const { data, error } = await (supabase as any)
+          .from('transactions')
+          .insert([{ ...op.payload, user_id: user!.id }])
+          .select()
+          .single();
+        if (error) throw error;
+        if (op.tempId) idMap[op.tempId] = (data as Transaction).id;
+        setState(s => ({
+          ...s,
+          transactions: s.transactions.map(t => t.id === op.tempId ? data as Transaction : t),
+        }));
+        break;
+      }
+      case 'updateTransaction': {
+        const payload = { ...op.payload, id: resolveId(op.payload.id) };
+        const { error } = await (supabase as any).from('transactions').update(payload).eq('id', payload.id);
+        if (error) throw error;
+        break;
+      }
+      case 'deleteTransaction': {
+        const realId = resolveId(op.payload.id);
+        const { error } = await (supabase as any).from('transactions').delete().eq('id', realId);
+        if (error) throw error;
+        break;
+      }
+      case 'addCategory': {
+        const { data, error } = await (supabase as any)
+          .from('categories')
+          .insert([{ ...op.payload, user_id: user!.id }])
+          .select()
+          .single();
+        if (error) throw error;
+        if (op.tempId) idMap[op.tempId] = (data as Category).id;
+        setState(s => ({
+          ...s,
+          categories: s.categories.map(c => c.id === op.tempId ? data as Category : c),
+        }));
+        break;
+      }
+      case 'updateCategory': {
+        const { error } = await (supabase as any).from('categories').upsert({ ...op.payload, user_id: user!.id });
+        if (error) throw error;
+        break;
+      }
+      case 'deleteCategory': {
+        const { error } = await supabase.from('categories').delete().eq('id', resolveId(op.payload.id));
+        if (error) throw error;
+        break;
+      }
+      case 'addGoal': {
+        const { data, error } = await (supabase as any)
+          .from('goals')
+          .insert([{ ...op.payload, user_id: user!.id }])
+          .select()
+          .single();
+        if (error) throw error;
+        if (op.tempId) idMap[op.tempId] = (data as SavingsGoal).id;
+        setState(s => ({
+          ...s,
+          goals: s.goals.map(g => g.id === op.tempId ? data as SavingsGoal : g),
+        }));
+        break;
+      }
+      case 'updateGoal': {
+        const { error } = await (supabase as any).from('goals').update(op.payload).eq('id', resolveId(op.payload.id));
+        if (error) throw error;
+        break;
+      }
+      case 'deleteGoal': {
+        const { error } = await supabase.from('goals').delete().eq('id', resolveId(op.payload.id));
+        if (error) throw error;
+        break;
+      }
+      case 'updateProfile': {
+        const { error } = await (supabase as any)
+          .from('profiles')
+          .upsert({ id: user!.id, ...op.payload, updated_at: new Date().toISOString() });
+        if (error) throw error;
+        break;
+      }
+    }
+  }, [user]);
+
+  /** Flush all queued offline operations to Supabase in order */
+  const flushQueue = useCallback(async () => {
+    if (!user || isSyncing.current) return;
+    const queue = loadQueue();
+    if (queue.length === 0) return;
+
+    isSyncing.current = true;
+    setSyncing(true);
+
+    const idMap: Record<string, string> = {};
+
+    for (const op of queue) {
+      try {
+        await executeQueuedOp(op, idMap);
+        dequeue(op.id);
+        setPendingSyncCount(loadQueue().length);
+      } catch (err) {
+        console.error('Offline queue flush error for op', op.type, err);
+        break;
+      }
+    }
+
+    isSyncing.current = false;
+    setSyncing(false);
+
+    if (loadQueue().length === 0) {
+      fetchDataRef.current?.();
+      toast.success('Back online — all changes synced');
+    }
+  }, [user, executeQueuedOp]);
+
+  // Listen for coming back online → flush queue
+  useEffect(() => {
+    const handleOnline = () => {
+      if (user) flushQueue();
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [user, flushQueue]);
 
   const addTransaction = useCallback(async (t: Omit<Transaction, 'id'>) => {
     if (!user) {
       toast.error('Please sign in to perform this action');
       return;
     }
+
+    // Optimistic update — instant UI feedback regardless of network speed
+    const tempId = crypto.randomUUID();
+    const optimistic: Transaction = { ...t, id: tempId };
+    setState(s => ({ ...s, transactions: [optimistic, ...s.transactions] }));
+
+    if (!navigator.onLine) {
+      enqueue({ type: 'addTransaction', payload: t, tempId });
+      setPendingSyncCount(loadQueue().length);
+      toast.warning('Saved locally — will sync when back online');
+      return;
+    }
+
     try {
       const { data, error } = await (supabase as any)
         .from('transactions')
@@ -321,7 +496,8 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
 
-      setState(s => ({ ...s, transactions: [data as Transaction, ...s.transactions] }));
+      // Swap optimistic entry with real server record
+      setState(s => ({ ...s, transactions: s.transactions.map(x => x.id === tempId ? data as Transaction : x) }));
 
       if (t.goal_id) await updateGoalProgress(t.goal_id);
       if (t.category) await checkBudgetAlerts(t.category, [data as Transaction, ...state.transactions]);
@@ -329,7 +505,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       await fetchData();
     } catch (error) {
       console.error('Failed to add transaction:', error);
-      toast.error('Failed to add transaction');
+      // Queue for later sync
+      enqueue({ type: 'addTransaction', payload: t, tempId });
+      setPendingSyncCount(loadQueue().length);
+      toast.warning('Saved locally — will sync when back online');
     }
   }, [user, state.transactions, updateGoalProgress, checkBudgetAlerts, fetchData]);
 
@@ -338,6 +517,17 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       toast.error('Please sign in to perform this action');
       return;
     }
+
+    // Optimistic update
+    setState(s => ({ ...s, transactions: s.transactions.map(x => x.id === t.id ? t : x) }));
+
+    if (!navigator.onLine) {
+      enqueue({ type: 'updateTransaction', payload: t });
+      setPendingSyncCount(loadQueue().length);
+      toast.warning('Saved locally — will sync when back online');
+      return;
+    }
+
     try {
       const oldTr = state.transactions.find(x => x.id === t.id);
       const { error } = await (supabase as any)
@@ -347,8 +537,6 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
 
-      setState(s => ({ ...s, transactions: s.transactions.map(x => x.id === t.id ? t : x) }));
-
       if (oldTr?.goal_id) await updateGoalProgress(oldTr.goal_id);
       if (t.goal_id && t.goal_id !== oldTr?.goal_id) await updateGoalProgress(t.goal_id);
       if (t.category) await checkBudgetAlerts(t.category, state.transactions.map(x => x.id === t.id ? t : x));
@@ -356,7 +544,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       toast.success('Transaction Updated');
       await fetchData();
     } catch (error) {
-      toast.error('Failed to update transaction');
+      enqueue({ type: 'updateTransaction', payload: t });
+      setPendingSyncCount(loadQueue().length);
+      toast.warning('Saved locally — will sync when back online');
       console.error(error);
     }
   }, [user, state.transactions, updateGoalProgress, checkBudgetAlerts, fetchData]);
@@ -366,20 +556,29 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       toast.error('Please sign in to perform this action');
       return;
     }
-    try {
-      const trToDelete = state.transactions.find(x => x.id === id);
-      const { error } = await (supabase as any).from('transactions').delete().eq('id', id);
 
+    const trToDelete = state.transactions.find(x => x.id === id);
+    // Optimistic remove
+    setState(s => ({ ...s, transactions: s.transactions.filter(x => x.id !== id) }));
+
+    if (!navigator.onLine) {
+      enqueue({ type: 'deleteTransaction', payload: { id } });
+      setPendingSyncCount(loadQueue().length);
+      toast.info('Deleted locally — will sync when back online');
+      return;
+    }
+
+    try {
+      const { error } = await (supabase as any).from('transactions').delete().eq('id', id);
       if (error) throw error;
 
-      setState(s => ({ ...s, transactions: s.transactions.filter(x => x.id !== id) }));
       toast.info('Transaction Deleted');
-
       if (trToDelete?.goal_id) await updateGoalProgress(trToDelete.goal_id);
-
       await fetchData();
     } catch (error) {
-      toast.error('Failed to delete transaction');
+      enqueue({ type: 'deleteTransaction', payload: { id } });
+      setPendingSyncCount(loadQueue().length);
+      toast.warning('Deleted locally — will sync when back online');
       console.error(error);
     }
   }, [user, state.transactions, updateGoalProgress, fetchData]);
@@ -389,6 +588,18 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       toast.error('Please sign in to perform this action');
       return;
     }
+
+    const tempId = crypto.randomUUID();
+    const optimistic: Category = { ...c, id: tempId };
+    setState(s => ({ ...s, categories: [...s.categories, optimistic] }));
+
+    if (!navigator.onLine) {
+      enqueue({ type: 'addCategory', payload: c, tempId });
+      setPendingSyncCount(loadQueue().length);
+      toast.warning('Saved locally — will sync when back online');
+      return;
+    }
+
     try {
       const { data, error } = await (supabase as any)
         .from('categories')
@@ -398,10 +609,12 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
 
-      setState(s => ({ ...s, categories: [...s.categories, data as Category] }));
+      setState(s => ({ ...s, categories: s.categories.map(x => x.id === tempId ? data as Category : x) }));
       toast.success('Category Created', { description: c.name });
     } catch (error) {
-      toast.error('Failed to create category');
+      enqueue({ type: 'addCategory', payload: c, tempId });
+      setPendingSyncCount(loadQueue().length);
+      toast.warning('Saved locally — will sync when back online');
     }
   }, [user]);
 
@@ -410,15 +623,26 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       toast.error('Please sign in to perform this action');
       return;
     }
+
+    setState(s => ({ ...s, categories: s.categories.map(x => x.id === c.id ? c : x) }));
+
+    if (!navigator.onLine) {
+      enqueue({ type: 'updateCategory', payload: c });
+      setPendingSyncCount(loadQueue().length);
+      toast.warning('Saved locally — will sync when back online');
+      return;
+    }
+
     try {
       const { error } = await (supabase as any).from('categories').upsert({ ...c, user_id: user.id });
       if (error) throw error;
 
-      setState(s => ({ ...s, categories: s.categories.map(x => x.id === c.id ? c : x) }));
       toast.success('Category Updated');
       await checkBudgetAlerts(c.name);
     } catch (error) {
-      toast.error('Failed to update category');
+      enqueue({ type: 'updateCategory', payload: c });
+      setPendingSyncCount(loadQueue().length);
+      toast.warning('Saved locally — will sync when back online');
     }
   }, [user, checkBudgetAlerts]);
 
@@ -427,14 +651,24 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       toast.error('Please sign in to perform this action');
       return;
     }
+
+    setState(s => ({ ...s, categories: s.categories.filter(x => x.id !== id) }));
+
+    if (!navigator.onLine) {
+      enqueue({ type: 'deleteCategory', payload: { id } });
+      setPendingSyncCount(loadQueue().length);
+      toast.info('Deleted locally — will sync when back online');
+      return;
+    }
+
     try {
       const { error } = await supabase.from('categories').delete().eq('id', id);
       if (error) throw error;
-
-      setState(s => ({ ...s, categories: s.categories.filter(x => x.id !== id) }));
       toast.info('Category Deleted');
     } catch (error) {
-      toast.error('Failed to delete category');
+      enqueue({ type: 'deleteCategory', payload: { id } });
+      setPendingSyncCount(loadQueue().length);
+      toast.warning('Deleted locally — will sync when back online');
     }
   }, [user]);
 
@@ -443,6 +677,18 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       toast.error('Please sign in to perform this action');
       return;
     }
+
+    const tempId = crypto.randomUUID();
+    const optimistic: SavingsGoal = { ...g, id: tempId };
+    setState(s => ({ ...s, goals: [...s.goals, optimistic] }));
+
+    if (!navigator.onLine) {
+      enqueue({ type: 'addGoal', payload: g, tempId });
+      setPendingSyncCount(loadQueue().length);
+      toast.warning('Saved locally — will sync when back online');
+      return;
+    }
+
     try {
       const { data, error } = await (supabase as any)
         .from('goals')
@@ -452,10 +698,12 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
 
-      setState(s => ({ ...s, goals: [...s.goals, data as SavingsGoal] }));
+      setState(s => ({ ...s, goals: s.goals.map(x => x.id === tempId ? data as SavingsGoal : x) }));
       toast.success('Goal Created');
     } catch (error) {
-      toast.error('Failed to create goal');
+      enqueue({ type: 'addGoal', payload: g, tempId });
+      setPendingSyncCount(loadQueue().length);
+      toast.warning('Saved locally — will sync when back online');
     }
   }, [user]);
 
@@ -464,14 +712,24 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       toast.error('Please sign in to perform this action');
       return;
     }
+
+    setState(s => ({ ...s, goals: s.goals.map(x => x.id === g.id ? g : x) }));
+
+    if (!navigator.onLine) {
+      enqueue({ type: 'updateGoal', payload: g });
+      setPendingSyncCount(loadQueue().length);
+      toast.warning('Saved locally — will sync when back online');
+      return;
+    }
+
     try {
       const { error } = await (supabase as any).from('goals').update(g).eq('id', g.id);
       if (error) throw error;
-
-      setState(s => ({ ...s, goals: s.goals.map(x => x.id === g.id ? g : x) }));
       toast.success('Goal Updated');
     } catch (error) {
-      toast.error('Failed to update goal');
+      enqueue({ type: 'updateGoal', payload: g });
+      setPendingSyncCount(loadQueue().length);
+      toast.warning('Saved locally — will sync when back online');
     }
   }, [user]);
 
@@ -480,14 +738,24 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       toast.error('Please sign in to perform this action');
       return;
     }
+
+    setState(s => ({ ...s, goals: s.goals.filter(x => x.id !== id) }));
+
+    if (!navigator.onLine) {
+      enqueue({ type: 'deleteGoal', payload: { id } });
+      setPendingSyncCount(loadQueue().length);
+      toast.info('Deleted locally — will sync when back online');
+      return;
+    }
+
     try {
       const { error } = await supabase.from('goals').delete().eq('id', id);
       if (error) throw error;
-
-      setState(s => ({ ...s, goals: s.goals.filter(x => x.id !== id) }));
       toast.info('Goal Removed');
     } catch (error) {
-      toast.error('Failed to remove goal');
+      enqueue({ type: 'deleteGoal', payload: { id } });
+      setPendingSyncCount(loadQueue().length);
+      toast.warning('Deleted locally — will sync when back online');
     }
   }, [user]);
 
@@ -500,6 +768,16 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       }));
       return;
     }
+
+    setState(s => ({ ...s, profile: { ...s.profile, ...p } }));
+
+    if (!navigator.onLine) {
+      enqueue({ type: 'updateProfile', payload: p });
+      setPendingSyncCount(loadQueue().length);
+      toast.warning('Saved locally — will sync when back online');
+      return;
+    }
+
     try {
       const { data, error } = await (supabase as any)
         .from('profiles')
@@ -512,7 +790,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       setState(s => ({ ...s, profile: { ...s.profile, ...data as UserProfile } }));
       toast.success('Profile Updated');
     } catch (error) {
-      toast.error('Failed to update profile');
+      enqueue({ type: 'updateProfile', payload: p });
+      setPendingSyncCount(loadQueue().length);
+      toast.warning('Saved locally — will sync when back online');
     }
   }, [user]);
 
@@ -553,7 +833,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       createNotification, markNotificationAsRead,
       setDateRange,
       completeOnboarding,
-      loading
+      loading,
+      pendingSyncCount,
+      syncing,
     }}>
       {children}
     </FinanceContext.Provider>

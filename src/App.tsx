@@ -19,6 +19,7 @@ import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
 import { InstallPWA } from "@/components/InstallPWA";
 import { AutoPushPrompt } from "@/components/AutoPushPrompt";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { Landing } from "./pages/Landing";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -31,7 +32,9 @@ const AppContent = () => {
     return sessionStorage.getItem('fenowa-skip-landing') === 'true';
   });
 
-  if (loading) return null;
+  // Only block render if we're loading AND online — offline we use persisted state
+  // and should never show a blank screen.
+  if (loading && navigator.onLine) return null;
 
   if (!user && !skipLanding) {
     return <Landing onContinueLater={() => {
@@ -68,6 +71,7 @@ const App = () => (
               <UIProvider>
                 <InstallPWA />
                 <AutoPushPrompt />
+                <OfflineBanner />
                 <BrowserRouter>
                   <AppContent />
                 </BrowserRouter>

@@ -4,7 +4,7 @@ import path from "path";
 import { VitePWA } from "vite-plugin-pwa";
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(() => ({
   server: {
     host: "::",
     port: 8080,
@@ -20,9 +20,11 @@ export default defineConfig(({ mode }) => ({
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
+      // Dev mode SW is intentionally disabled — the SW only works correctly
+      // against a production build. To test offline: run `npm run build`
+      // then `npm run preview`, then go offline in DevTools.
       devOptions: {
-        enabled: true,
-        type: 'module',
+        enabled: false,
       },
       includeAssets: ['favicon.ico', 'robots.txt', 'apple-touch-icon.png'],
       manifest: {
@@ -56,7 +58,6 @@ export default defineConfig(({ mode }) => ({
       },
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        injectionPoint: undefined,
       },
     }),
   ].filter(Boolean),
