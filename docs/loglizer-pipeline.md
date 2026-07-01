@@ -27,7 +27,7 @@ In this project:
 generate_logs.py → writes logs → logs/ folder → Loglizer runs → report uploaded
 ```
 
-The pipeline is identical. Only the log source differs.
+The pipeline is identical. Only the log source differs
 
 ---
 
