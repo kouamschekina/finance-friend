@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Loglizer — Anomaly Detection Report</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         background: #0f1117; color: #e2e8f0; min-height: 100vh; }
+  header { background: linear-gradient(135deg, #1a1f2e, #16213e);
+            border-bottom: 1px solid #2d3748; padding: 24px 32px; }
+  header h1 { font-size: 1.6rem; font-weight: 700; color: #fff; }
+  header p  { color: #94a3b8; margin-top: 4px; font-size: 0.9rem; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
+  .stat-card { background: #1e2535; border: 1px solid #2d3748; border-radius: 12px;
+                padding: 20px 24px; }
+  .stat-card .label { font-size: 0.8rem; color: #94a3b8; text-transform: uppercase;
+                        letter-spacing: 0.05em; margin-bottom: 8px; }
+  .stat-card .value { font-size: 2rem; font-weight: 700; }
+  .value.green  { color: #34d399; }
+  .value.red    { color: #f87171; }
+  .value.blue   { color: #60a5fa; }
+  .value.yellow { color: #fbbf24; }
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
+  @media (max-width: 700px) { .charts-row { grid-template-columns: 1fr; } }
+  .card { background: #1e2535; border: 1px solid #2d3748; border-radius: 12px;
+           padding: 24px; margin-bottom: 20px; }
+  .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 16px; color: #cbd5e1; }
+  .chart-wrap { position: relative; height: 260px; }
+  .anomaly-card { border-left: 3px solid #f87171; }
+  .card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .badge { font-size: 0.75rem; font-weight: 700; padding: 3px 10px;
+            border-radius: 20px; background: #f87171; color: #fff; }
+  .badge-danger { background: #f87171; }
+  .muted { color: #64748b; font-size: 0.85rem; }
+  .section-label { font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;
+                    letter-spacing: 0.05em; margin-bottom: 6px; }
+  .log-block { background: #0d1117; border-radius: 8px; padding: 12px 16px;
+                font-family: "JetBrains Mono", "Fira Code", monospace; font-size: 0.78rem; }
+  .log-line { color: #94a3b8; line-height: 1.8; }
+  .log-line:hover { color: #e2e8f0; }
+  ul { padding-left: 18px; }
+  li { margin: 4px 0; font-size: 0.9rem; color: #fbbf24; }
+  .tag { display: inline-block; background: #1a2a3a; border: 1px solid #2d4a6a;
+          color: #60a5fa; font-size: 0.78rem; padding: 3px 10px;
+          border-radius: 6px; margin: 3px; font-family: monospace; }
+  .model-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  .model-table td { padding: 10px 14px; border-bottom: 1px solid #2d3748; }
+  .model-table td:first-child { color: #94a3b8; width: 40%; }
+  .no-anomaly { color: #34d399; font-size: 1rem; padding: 16px 0; }
+  footer { text-align: center; color: #475569; font-size: 0.8rem;
+            padding: 32px; border-top: 1px solid #1e2535; margin-top: 16px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔍 Loglizer — Anomaly Detection Report</h1>
+  <p>Personal Finance Management App &nbsp;·&nbsp; Generated 2026-07-01 15:43:19</p>
+</header>
+
+<div class="container">
+
+  <!-- Stat cards -->
+  <div class="grid-4">
+    <div class="stat-card">
+      <div class="label">Total Sessions</div>
+      <div class="value blue">85</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Normal Sessions</div>
+      <div class="value green">83</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Anomalous Sessions</div>
+      <div class="value red">2</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Anomaly Rate</div>
+      <div class="value yellow">2.4%</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-row">
+    <div class="card">
+      <h2>Session Distribution</h2>
+      <div class="chart-wrap">
+        <canvas id="donutChart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Anomaly Types Detected</h2>
+      <div class="chart-wrap">
+        <canvas id="barChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Model info -->
+  <div class="card">
+    <h2>Model Information</h2>
+    <table class="model-table">
+      <tr><td>Algorithm</td><td>PCA (Principal Component Analysis)</td></tr>
+      <tr><td>Training Sessions</td><td>100</td></tr>
+      <tr><td>Training Events</td><td>690</td></tr>
+      <tr><td>Event Templates</td><td>7</td></tr>
+      <tr><td>Trained At</td><td>2026-07-01T15:35:39.315638</td></tr>
+    </table>
+  </div>
+
+  <!-- Anomaly cards -->
+  <div class="card">
+    <h2>Detected Anomalies</h2>
+    
+            <div class="card anomaly-card">
+                <div class="card-header">
+                    <span class="badge badge-danger">ANOMALY #1</span>
+                    <span class="muted">Session 82 &nbsp;·&nbsp; 478 events</span>
+                </div>
+                <div class="card-body">
+                    <div class="section-label">Detected Issues</div>
+                    <p class="muted">No specific indicators — flagged by PCA reconstruction error.</p>
+                    <div class="section-label" style="margin-top:12px">Log Preview</div>
+                    <div class="log-block"><div class="log-line">2026-07-04 16:52:08 INFO GET /api/expenses</div><div class="log-line">2026-07-04 16:52:10 INFO GET /api/budgets</div><div class="log-line">2026-07-04 16:52:11 INFO GET /api/expenses</div><div class="log-line">2026-07-04 16:52:12 INFO GET /api/expenses</div><div class="log-line">2026-07-04 16:52:13 INFO GET /api/expenses</div></div>
+                </div>
+            </div>
+            <div class="card anomaly-card">
+                <div class="card-header">
+                    <span class="badge badge-danger">ANOMALY #2</span>
+                    <span class="muted">Session 84 &nbsp;·&nbsp; 239 events</span>
+                </div>
+                <div class="card-body">
+                    <div class="section-label">Detected Issues</div>
+                    <p class="muted">No specific indicators — flagged by PCA reconstruction error.</p>
+                    <div class="section-label" style="margin-top:12px">Log Preview</div>
+                    <div class="log-block"><div class="log-line">2026-07-04 17:46:25 INFO GET /api/budgets</div><div class="log-line">2026-07-04 17:46:26 INFO GET /api/budgets</div><div class="log-line">2026-07-04 17:46:28 INFO GET /api/budgets</div><div class="log-line">2026-07-04 17:46:29 INFO GET /api/income</div><div class="log-line">2026-07-04 17:46:29 INFO GET /api/budgets</div></div>
+                </div>
+            </div>
+  </div>
+
+  <!-- Event templates -->
+  <div class="card">
+    <h2>Event Templates Used</h2>
+    <div><span class="tag">User login success user=*</span><span class="tag">GET /dashboard</span><span class="tag">Added expense amount=* category=* user=*</span><span class="tag">Added income amount=* user=*</span><span class="tag">User logout user=*</span><span class="tag">Budget created category=* user=*</span><span class="tag">Monthly report generated user=*</span></div>
+  </div>
+
+</div>
+
+<footer>Automatically generated by Loglizer Anomaly Detection Pipeline</footer>
+
+<script>
+const donutCtx = document.getElementById('donutChart').getContext('2d');
+new Chart(donutCtx, {
+  type: 'doughnut',
+  data: {
+    labels: ['Normal', 'Anomaly'],
+    datasets: [{
+      data: [83, 2],
+      backgroundColor: ['#34d399', '#f87171'],
+      borderColor: ['#1e2535', '#1e2535'],
+      borderWidth: 3
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: '#94a3b8' } }
+    }
+  }
+});
+
+const barCtx = document.getElementById('barChart').getContext('2d');
+new Chart(barCtx, {
+  type: 'bar',
+  data: {
+    labels: ["Traffic Spike"],
+    datasets: [{
+      label: 'Count',
+      data: [2],
+      backgroundColor: '#f87171',
+      borderRadius: 6
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#94a3b8' }, grid: { color: '#2d3748' } },
+      y: { ticks: { color: '#94a3b8', stepSize: 1 }, grid: { color: '#2d3748' } }
+    }
+  }
+});
+</script>
+</body>
+</html>

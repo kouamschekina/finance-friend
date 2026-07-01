@@ -168,6 +168,21 @@ async function sendPush(
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  // Auth: accept either a valid Supabase JWT OR the cron secret header.
+  // The cron secret approach lets pg_cron call this without a user JWT.
+  const CRON_SECRET = Deno.env.get("CRON_SECRET");
+  const cronHeader = req.headers.get("x-cron-secret");
+  const authHeader = req.headers.get("authorization") ?? "";
+
+  const isValidCronSecret = CRON_SECRET && cronHeader === CRON_SECRET;
+  const isValidJwt = authHeader.startsWith("Bearer ");
+
+  if (!isValidCronSecret && !isValidJwt) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY")!;
   const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY")!;
   const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") ?? "mailto:admin@fenowa.app";

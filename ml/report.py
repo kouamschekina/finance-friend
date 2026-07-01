@@ -118,6 +118,263 @@ def generate_markdown_report(results, model_info, output_file='reports/report.md
     return output_file
 
 
+def generate_html_report(results, model_info, output_file='reports/index.html'):
+    """Generate a visual HTML report with charts."""
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+
+    summary = results['summary']
+    anomalies = results['anomaly']
+    normal_count = summary['normal_count']
+    anomaly_count = summary['anomaly_count']
+    total = summary['total_sessions']
+    anomaly_rate = round((anomaly_count / total * 100), 1) if total > 0 else 0
+    generated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # Build anomaly type breakdown for bar chart
+    type_counts = {}
+    for a in anomalies:
+        for ind in a.get('indicators', []):
+            # Shorten the label
+            if 'login' in ind.lower():
+                label = 'Brute-force Login'
+            elif 'database' in ind.lower() or 'timeout' in ind.lower():
+                label = 'DB Timeout'
+            elif 'unauthorized' in ind.lower():
+                label = 'Unauthorized Access'
+            elif 'exception' in ind.lower():
+                label = 'Server Exception'
+            elif 'slow' in ind.lower():
+                label = 'Slow Response'
+            else:
+                label = 'Traffic Spike'
+            type_counts[label] = type_counts.get(label, 0) + 1
+
+    # If no indicators were extracted, count raw anomalies as traffic spikes
+    if not type_counts and anomaly_count > 0:
+        type_counts['Traffic Spike'] = anomaly_count
+
+    bar_labels = json.dumps(list(type_counts.keys()))
+    bar_values = json.dumps(list(type_counts.values()))
+
+    # Build anomaly cards HTML
+    anomaly_cards = ''
+    if not anomalies:
+        anomaly_cards = '<p class="no-anomaly">✅ No anomalies detected. All sessions exhibited normal behavior.</p>'
+    else:
+        for i, a in enumerate(anomalies, 1):
+            indicators_html = ''
+            if a.get('indicators'):
+                indicators_html = '<ul>' + ''.join(f'<li>{ind}</li>' for ind in a['indicators']) + '</ul>'
+            else:
+                indicators_html = '<p class="muted">No specific indicators — flagged by PCA reconstruction error.</p>'
+
+            preview_lines = ''.join(
+                f'<div class="log-line">{line}</div>'
+                for line in a.get('events_preview', [])[:5]
+            )
+
+            anomaly_cards += f'''
+            <div class="card anomaly-card">
+                <div class="card-header">
+                    <span class="badge badge-danger">ANOMALY #{i}</span>
+                    <span class="muted">Session {a["session_index"]} &nbsp;·&nbsp; {a["event_count"]} events</span>
+                </div>
+                <div class="card-body">
+                    <div class="section-label">Detected Issues</div>
+                    {indicators_html}
+                    <div class="section-label" style="margin-top:12px">Log Preview</div>
+                    <div class="log-block">{preview_lines}</div>
+                </div>
+            </div>'''
+
+    # Event templates list
+    templates_html = ''.join(
+        f'<span class="tag">{t}</span>'
+        for _, t in sorted(model_info.get('event_templates', {}).items())
+    )
+
+    html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Loglizer — Anomaly Detection Report</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         background: #0f1117; color: #e2e8f0; min-height: 100vh; }}
+  header {{ background: linear-gradient(135deg, #1a1f2e, #16213e);
+            border-bottom: 1px solid #2d3748; padding: 24px 32px; }}
+  header h1 {{ font-size: 1.6rem; font-weight: 700; color: #fff; }}
+  header p  {{ color: #94a3b8; margin-top: 4px; font-size: 0.9rem; }}
+  .container {{ max-width: 1100px; margin: 0 auto; padding: 32px 24px; }}
+  .grid-4 {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }}
+  .stat-card {{ background: #1e2535; border: 1px solid #2d3748; border-radius: 12px;
+                padding: 20px 24px; }}
+  .stat-card .label {{ font-size: 0.8rem; color: #94a3b8; text-transform: uppercase;
+                        letter-spacing: 0.05em; margin-bottom: 8px; }}
+  .stat-card .value {{ font-size: 2rem; font-weight: 700; }}
+  .value.green  {{ color: #34d399; }}
+  .value.red    {{ color: #f87171; }}
+  .value.blue   {{ color: #60a5fa; }}
+  .value.yellow {{ color: #fbbf24; }}
+  .charts-row {{ display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }}
+  @media (max-width: 700px) {{ .charts-row {{ grid-template-columns: 1fr; }} }}
+  .card {{ background: #1e2535; border: 1px solid #2d3748; border-radius: 12px;
+           padding: 24px; margin-bottom: 20px; }}
+  .card h2 {{ font-size: 1rem; font-weight: 600; margin-bottom: 16px; color: #cbd5e1; }}
+  .chart-wrap {{ position: relative; height: 260px; }}
+  .anomaly-card {{ border-left: 3px solid #f87171; }}
+  .card-header {{ display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }}
+  .badge {{ font-size: 0.75rem; font-weight: 700; padding: 3px 10px;
+            border-radius: 20px; background: #f87171; color: #fff; }}
+  .badge-danger {{ background: #f87171; }}
+  .muted {{ color: #64748b; font-size: 0.85rem; }}
+  .section-label {{ font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;
+                    letter-spacing: 0.05em; margin-bottom: 6px; }}
+  .log-block {{ background: #0d1117; border-radius: 8px; padding: 12px 16px;
+                font-family: "JetBrains Mono", "Fira Code", monospace; font-size: 0.78rem; }}
+  .log-line {{ color: #94a3b8; line-height: 1.8; }}
+  .log-line:hover {{ color: #e2e8f0; }}
+  ul {{ padding-left: 18px; }}
+  li {{ margin: 4px 0; font-size: 0.9rem; color: #fbbf24; }}
+  .tag {{ display: inline-block; background: #1a2a3a; border: 1px solid #2d4a6a;
+          color: #60a5fa; font-size: 0.78rem; padding: 3px 10px;
+          border-radius: 6px; margin: 3px; font-family: monospace; }}
+  .model-table {{ width: 100%; border-collapse: collapse; font-size: 0.9rem; }}
+  .model-table td {{ padding: 10px 14px; border-bottom: 1px solid #2d3748; }}
+  .model-table td:first-child {{ color: #94a3b8; width: 40%; }}
+  .no-anomaly {{ color: #34d399; font-size: 1rem; padding: 16px 0; }}
+  footer {{ text-align: center; color: #475569; font-size: 0.8rem;
+            padding: 32px; border-top: 1px solid #1e2535; margin-top: 16px; }}
+</style>
+</head>
+<body>
+<header>
+  <h1>🔍 Loglizer — Anomaly Detection Report</h1>
+  <p>Personal Finance Management App &nbsp;·&nbsp; Generated {generated_at}</p>
+</header>
+
+<div class="container">
+
+  <!-- Stat cards -->
+  <div class="grid-4">
+    <div class="stat-card">
+      <div class="label">Total Sessions</div>
+      <div class="value blue">{total}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Normal Sessions</div>
+      <div class="value green">{normal_count}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Anomalous Sessions</div>
+      <div class="value red">{anomaly_count}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Anomaly Rate</div>
+      <div class="value yellow">{anomaly_rate}%</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-row">
+    <div class="card">
+      <h2>Session Distribution</h2>
+      <div class="chart-wrap">
+        <canvas id="donutChart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Anomaly Types Detected</h2>
+      <div class="chart-wrap">
+        <canvas id="barChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Model info -->
+  <div class="card">
+    <h2>Model Information</h2>
+    <table class="model-table">
+      <tr><td>Algorithm</td><td>PCA (Principal Component Analysis)</td></tr>
+      <tr><td>Training Sessions</td><td>{model_info.get("num_sessions", "N/A")}</td></tr>
+      <tr><td>Training Events</td><td>{model_info.get("num_events", "N/A")}</td></tr>
+      <tr><td>Event Templates</td><td>{len(model_info.get("event_templates", {}))}</td></tr>
+      <tr><td>Trained At</td><td>{model_info.get("trained_at", "N/A")}</td></tr>
+    </table>
+  </div>
+
+  <!-- Anomaly cards -->
+  <div class="card">
+    <h2>Detected Anomalies</h2>
+    {anomaly_cards}
+  </div>
+
+  <!-- Event templates -->
+  <div class="card">
+    <h2>Event Templates Used</h2>
+    <div>{templates_html}</div>
+  </div>
+
+</div>
+
+<footer>Automatically generated by Loglizer Anomaly Detection Pipeline</footer>
+
+<script>
+const donutCtx = document.getElementById('donutChart').getContext('2d');
+new Chart(donutCtx, {{
+  type: 'doughnut',
+  data: {{
+    labels: ['Normal', 'Anomaly'],
+    datasets: [{{
+      data: [{normal_count}, {anomaly_count}],
+      backgroundColor: ['#34d399', '#f87171'],
+      borderColor: ['#1e2535', '#1e2535'],
+      borderWidth: 3
+    }}]
+  }},
+  options: {{
+    responsive: true, maintainAspectRatio: false,
+    plugins: {{
+      legend: {{ labels: {{ color: '#94a3b8' }} }}
+    }}
+  }}
+}});
+
+const barCtx = document.getElementById('barChart').getContext('2d');
+new Chart(barCtx, {{
+  type: 'bar',
+  data: {{
+    labels: {bar_labels},
+    datasets: [{{
+      label: 'Count',
+      data: {bar_values},
+      backgroundColor: '#f87171',
+      borderRadius: 6
+    }}]
+  }},
+  options: {{
+    responsive: true, maintainAspectRatio: false,
+    plugins: {{ legend: {{ display: false }} }},
+    scales: {{
+      x: {{ ticks: {{ color: '#94a3b8' }}, grid: {{ color: '#2d3748' }} }},
+      y: {{ ticks: {{ color: '#94a3b8', stepSize: 1 }}, grid: {{ color: '#2d3748' }} }}
+    }}
+  }}
+}});
+</script>
+</body>
+</html>'''
+
+    with open(output_file, 'w') as f:
+        f.write(html)
+
+    print(f"HTML report saved to {output_file}")
+    return output_file
+
+
 def generate_summary_json(results, model_info, output_file='reports/summary.json'):
     """Generate JSON summary for dashboards."""
     summary_data = {
@@ -173,6 +430,7 @@ def main():
     
     print("Generating reports...")
     generate_markdown_report(results, model_info)
+    generate_html_report(results, model_info)
     generate_summary_json(results, model_info)
     
     print("\nReport generation complete!")

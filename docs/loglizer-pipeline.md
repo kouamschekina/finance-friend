@@ -352,6 +352,25 @@ python3 ml/report.py
 
 # View the report
 cat reports/report.md
+# Or open reports/index.html in a browser for the visual dashboard
+```
+
+---
+
+## Enabling GitHub Pages (one-time setup)
+
+The CI automatically deploys the visual HTML report to GitHub Pages after every push to `main`, `master`, or `feat/loglizer`.
+
+To enable it:
+
+1. Go to your repository on GitHub
+2. Click **Settings** → **Pages**
+3. Under **Source**, select **GitHub Actions**
+4. Save
+
+After the next push, the report will be live at:
+```
+https://<your-username>.github.io/<your-repo-name>/
 ```
 
 ---

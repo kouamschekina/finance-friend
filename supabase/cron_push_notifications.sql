@@ -1,29 +1,74 @@
--- Run ALL of this at once in the Supabase SQL Editor
--- Make sure pg_cron and pg_net extensions are enabled first
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Fenowa Push Notification Cron Jobs
+-- Run this entire script in the Supabase SQL Editor
+--
+-- Prerequisites:
+--   1. Go to Database → Extensions → enable "pg_cron" and "pg_net"
+--   2. Deploy the Edge Function with: supabase functions deploy send-push-notifications
+--   3. Set CRON_SECRET in Edge Function secrets (Supabase Dashboard →
+--      Edge Functions → send-push-notifications → Secrets)
+--      Use any random string, e.g.: openssl rand -hex 32
+--   4. Replace YOUR_CRON_SECRET below with that same value
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Drop existing jobs first (safe to re-run)
+DO $$
+BEGIN
+  PERFORM cron.unschedule(jobname)
+  FROM cron.job
+  WHERE jobname LIKE 'fenowa-push-%';
+END $$;
+
+-- ── Schedule 3 daily reminders (times in UTC) ─────────────────────────────────
+-- WAT = UTC+1, so adjust: 8am WAT = 7am UTC, 1pm WAT = 12pm UTC, 8pm WAT = 7pm UTC
 
 SELECT cron.schedule(
   'fenowa-push-morning',
-  '0 8 * * *',
-  'SELECT net.http_post(url:=''https://lwxbmjplykpcneirfpyy.supabase.co/functions/v1/send-push-notifications'', headers:=''{\"Content-Type\":\"application/json\",\"Authorization\":\"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3eGJtanBseWtwY25laXJmcHl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2OTY3MzAsImV4cCI6MjA4MzI3MjczMH0.JuwbPPlSI5w_C6XUte_il3cb9fTatcCOjB23khQy6JQ\"}''::jsonb, body:=''{}''::jsonb);'
+  '0 7 * * *',
+  $cmd$
+  SELECT net.http_post(
+    url     := 'https://lwxbmjplykpcneirfpyy.supabase.co/functions/v1/send-push-notifications',
+    headers := '{"Content-Type":"application/json","x-cron-secret":"YOUR_CRON_SECRET"}'::jsonb,
+    body    := '{}'::jsonb
+  ) AS request_id;
+  $cmd$
 );
 
 SELECT cron.schedule(
-  'fenowa-push-noon',
+  'fenowa-push-midday',
   '0 12 * * *',
-  'SELECT net.http_post(url:=''https://lwxbmjplykpcneirfpyy.supabase.co/functions/v1/send-push-notifications'', headers:=''{\"Content-Type\":\"application/json\",\"Authorization\":\"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3eGJtanBseWtwY25laXJmcHl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2OTY3MzAsImV4cCI6MjA4MzI3MjczMH0.JuwbPPlSI5w_C6XUte_il3cb9fTatcCOjB23khQy6JQ\"}''::jsonb, body:=''{}''::jsonb);'
-);
-
-SELECT cron.schedule(
-  'fenowa-push-afternoon',
-  '0 13 * * *',
-  'SELECT net.http_post(url:=''https://lwxbmjplykpcneirfpyy.supabase.co/functions/v1/send-push-notifications'', headers:=''{\"Content-Type\":\"application/json\",\"Authorization\":\"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3eGJtanBseWtwY25laXJmcHl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2OTY3MzAsImV4cCI6MjA4MzI3MjczMH0.JuwbPPlSI5w_C6XUte_il3cb9fTatcCOjB23khQy6JQ\"}''::jsonb, body:=''{}''::jsonb);'
+  $cmd$
+  SELECT net.http_post(
+    url     := 'https://lwxbmjplykpcneirfpyy.supabase.co/functions/v1/send-push-notifications',
+    headers := '{"Content-Type":"application/json","x-cron-secret":"YOUR_CRON_SECRET"}'::jsonb,
+    body    := '{}'::jsonb
+  ) AS request_id;
+  $cmd$
 );
 
 SELECT cron.schedule(
   'fenowa-push-evening',
-  '0 20 * * *',
-  'SELECT net.http_post(url:=''https://lwxbmjplykpcneirfpyy.supabase.co/functions/v1/send-push-notifications'', headers:=''{\"Content-Type\":\"application/json\",\"Authorization\":\"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3eGJtanBseWtwY25laXJmcHl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2OTY3MzAsImV4cCI6MjA4MzI3MjczMH0.JuwbPPlSI5w_C6XUte_il3cb9fTatcCOjB23khQy6JQ\"}''::jsonb, body:=''{}''::jsonb);'
+  '0 19 * * *',
+  $cmd$
+  SELECT net.http_post(
+    url     := 'https://lwxbmjplykpcneirfpyy.supabase.co/functions/v1/send-push-notifications',
+    headers := '{"Content-Type":"application/json","x-cron-secret":"YOUR_CRON_SECRET"}'::jsonb,
+    body    := '{}'::jsonb
+  ) AS request_id;
+  $cmd$
 );
 
--- Verify all 4 jobs are scheduled:
+-- Verify
 SELECT jobid, jobname, schedule, active FROM cron.job WHERE jobname LIKE 'fenowa-%';
+
+-- ── To check recent execution logs: ──────────────────────────────────────────
+-- SELECT * FROM cron.job_run_details WHERE jobid IN (
+--   SELECT jobid FROM cron.job WHERE jobname LIKE 'fenowa-%'
+-- ) ORDER BY start_time DESC LIMIT 20;
+
+-- ── To manually test right now (runs immediately): ───────────────────────────
+-- SELECT net.http_post(
+--   url     := 'https://lwxbmjplykpcneirfpyy.supabase.co/functions/v1/send-push-notifications',
+--   headers := '{"Content-Type":"application/json","x-cron-secret":"YOUR_CRON_SECRET"}'::jsonb,
+--   body    := '{}'::jsonb
+-- );
