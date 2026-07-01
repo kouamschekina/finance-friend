@@ -1,5 +1,6 @@
 # Loglizer Anomaly Detection Pipeline — Full Documentation
 
+
 ## Overview
 
 This document explains the complete flow of how log anomaly detection works in this project: from log generation, through parsing and machine learning, to report generation and CI/CD automation via GitHub Actions.
