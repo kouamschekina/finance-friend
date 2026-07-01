@@ -119,7 +119,7 @@ def generate_markdown_report(results, model_info, output_file='reports/report.md
 
 
 def generate_html_report(results, model_info, output_file='reports/index.html'):
-    """Generate a visual HTML report with charts."""
+    """Generate a visual HTML report with charts and inline explanations."""
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
     summary = results['summary']
@@ -130,43 +130,86 @@ def generate_html_report(results, model_info, output_file='reports/index.html'):
     anomaly_rate = round((anomaly_count / total * 100), 1) if total > 0 else 0
     generated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    # Build anomaly type breakdown for bar chart
+    # Overall health assessment
+    if anomaly_rate == 0:
+        health_color = '#34d399'
+        health_icon = '&#x2705;'
+        health_label = 'All Clear'
+        health_msg = f'No anomalies detected across all {total} sessions. Every session matched the expected normal behavior pattern learned during training.'
+    elif anomaly_rate < 5:
+        health_color = '#fbbf24'
+        health_icon = '&#x26A0;&#xFE0F;'
+        health_label = 'Low Anomaly Rate'
+        health_msg = f'{anomaly_count} suspicious session(s) found out of {total}. Low rate, but the flagged sessions below are worth reviewing.'
+    elif anomaly_rate < 15:
+        health_color = '#f97316'
+        health_icon = '&#x1F536;'
+        health_label = 'Moderate Anomaly Rate'
+        health_msg = f'{anomaly_count} anomalous sessions detected ({anomaly_rate}%). This is elevated. Review the flagged sessions below immediately.'
+    else:
+        health_color = '#f87171'
+        health_icon = '&#x1F6A8;'
+        health_label = 'High Anomaly Rate'
+        health_msg = f'{anomaly_count} anomalous sessions ({anomaly_rate}%). Critical — the system may be under attack or experiencing serious failures.'
+
+    # Anomaly type explanations
+    anomaly_type_info = {
+        'Brute-force Login': ('&#x1F513;', 'Multiple consecutive failed login attempts for the same user. A real user fails once or twice at most. This pattern means an automated script is trying to guess a password.'),
+        'DB Timeout':        ('&#x1F4BE;', 'The application failed to connect to the database multiple times in a row. This means users could not load or save data. Causes: database crashed, network issue, or the DB server is overloaded.'),
+        'Unauthorized Access':('&#x1F6AB;', 'Repeated attempts to reach admin or restricted endpoints. Normal users never hit /admin or /api/users. This suggests someone is probing the system for weaknesses or trying to escalate privileges.'),
+        'Server Exception':  ('&#x1F4A5;', 'Repeated application errors in rapid succession. A single exception is expected occasionally. Many in a row means a feature is broken or a critical resource (file, service, memory) is unavailable.'),
+        'Slow Response':     ('&#x1F40C;', 'Multiple requests taking far longer than expected. Occasional slowness is normal. Repeated slowness across a session points to resource exhaustion, a slow query, or a degraded external service.'),
+        'Traffic Spike':     ('&#x1F4C8;', 'Hundreds of requests fired within seconds from one session. A normal human session has 5-15 requests over several minutes. This volume is only possible with automation — likely a bot, scraper, or DDoS-like flood.'),
+    }
+
+    # Build anomaly type counts for bar chart
     type_counts = {}
     for a in anomalies:
         for ind in a.get('indicators', []):
-            # Shorten the label
-            if 'login' in ind.lower():
-                label = 'Brute-force Login'
-            elif 'database' in ind.lower() or 'timeout' in ind.lower():
-                label = 'DB Timeout'
-            elif 'unauthorized' in ind.lower():
-                label = 'Unauthorized Access'
-            elif 'exception' in ind.lower():
-                label = 'Server Exception'
-            elif 'slow' in ind.lower():
-                label = 'Slow Response'
-            else:
-                label = 'Traffic Spike'
+            if 'login' in ind.lower():      label = 'Brute-force Login'
+            elif 'database' in ind.lower() or 'timeout' in ind.lower(): label = 'DB Timeout'
+            elif 'unauthorized' in ind.lower(): label = 'Unauthorized Access'
+            elif 'exception' in ind.lower(): label = 'Server Exception'
+            elif 'slow' in ind.lower():     label = 'Slow Response'
+            else:                           label = 'Traffic Spike'
             type_counts[label] = type_counts.get(label, 0) + 1
-
-    # If no indicators were extracted, count raw anomalies as traffic spikes
     if not type_counts and anomaly_count > 0:
         type_counts['Traffic Spike'] = anomaly_count
 
     bar_labels = json.dumps(list(type_counts.keys()))
     bar_values = json.dumps(list(type_counts.values()))
 
-    # Build anomaly cards HTML
+    # Build anomaly cards
     anomaly_cards = ''
     if not anomalies:
-        anomaly_cards = '<p class="no-anomaly">✅ No anomalies detected. All sessions exhibited normal behavior.</p>'
+        anomaly_cards = '<p class="no-anomaly">&#x2705; No anomalies detected. All sessions matched the normal behavior pattern.</p>'
     else:
         for i, a in enumerate(anomalies, 1):
+            # Determine primary type
+            ptype = 'Traffic Spike'
+            for ind in a.get('indicators', []):
+                if 'login' in ind.lower():       ptype = 'Brute-force Login'; break
+                elif 'database' in ind.lower() or 'timeout' in ind.lower(): ptype = 'DB Timeout'; break
+                elif 'unauthorized' in ind.lower(): ptype = 'Unauthorized Access'; break
+                elif 'exception' in ind.lower(): ptype = 'Server Exception'; break
+                elif 'slow' in ind.lower():      ptype = 'Slow Response'; break
+
+            picon, pexpl = anomaly_type_info.get(ptype, ('&#x26A0;', 'Unusual pattern detected.'))
+
+            normal_avg = 7
+            ec = a['event_count']
+            if ec > normal_avg * 10:
+                size_note = f'This session has <strong>{ec} events</strong>. A normal session averages ~{normal_avg} events. That is {round(ec/normal_avg)}x more activity than expected — a very strong anomaly signal on its own.'
+            elif ec > normal_avg * 3:
+                size_note = f'This session has <strong>{ec} events</strong> vs a normal average of ~{normal_avg}. Unusually high activity for one session.'
+            else:
+                size_note = f'This session has <strong>{ec} events</strong>. The event count is not unusual, but the <em>pattern</em> of which events appeared triggered the anomaly flag.'
+
             indicators_html = ''
             if a.get('indicators'):
                 indicators_html = '<ul>' + ''.join(f'<li>{ind}</li>' for ind in a['indicators']) + '</ul>'
             else:
-                indicators_html = '<p class="muted">No specific indicators — flagged by PCA reconstruction error.</p>'
+                indicators_html = '<p class="muted">Flagged by PCA reconstruction error — the combination of events in this session is statistically inconsistent with normal behavior.</p>'
 
             preview_lines = ''.join(
                 f'<div class="log-line">{line}</div>'
@@ -174,20 +217,31 @@ def generate_html_report(results, model_info, output_file='reports/index.html'):
             )
 
             anomaly_cards += f'''
-            <div class="card anomaly-card">
-                <div class="card-header">
-                    <span class="badge badge-danger">ANOMALY #{i}</span>
-                    <span class="muted">Session {a["session_index"]} &nbsp;·&nbsp; {a["event_count"]} events</span>
+            <div class="anomaly-card">
+              <div class="ac-header">
+                <span class="badge-danger">ANOMALY #{i}</span>
+                <span class="atype">{picon} {ptype}</span>
+                <span class="muted">Session {a["session_index"]} &middot; {ec} events</span>
+              </div>
+              <div class="expl-box">
+                <div class="expl-label">What does this mean?</div>
+                <p>{pexpl}</p>
+              </div>
+              <div class="ac-grid">
+                <div>
+                  <div class="slabel">Why Loglizer flagged it</div>
+                  {indicators_html}
+                  <p class="size-note">{size_note}</p>
                 </div>
-                <div class="card-body">
-                    <div class="section-label">Detected Issues</div>
-                    {indicators_html}
-                    <div class="section-label" style="margin-top:12px">Log Preview</div>
-                    <div class="log-block">{preview_lines}</div>
+                <div>
+                  <div class="slabel">First 5 log lines from this session</div>
+                  <div class="log-block">{preview_lines}</div>
+                  <p class="muted" style="margin-top:8px;font-size:0.78rem">These are the actual raw log entries that caused the flag. Compare them to a normal session: login &rarr; add expense &rarr; logout.</p>
                 </div>
+              </div>
             </div>'''
 
-    # Event templates list
+    # Event templates
     templates_html = ''.join(
         f'<span class="tag">{t}</span>'
         for _, t in sorted(model_info.get('event_templates', {}).items())
@@ -196,170 +250,211 @@ def generate_html_report(results, model_info, output_file='reports/index.html'):
     html = f'''<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Loglizer — Anomaly Detection Report</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-         background: #0f1117; color: #e2e8f0; min-height: 100vh; }}
-  header {{ background: linear-gradient(135deg, #1a1f2e, #16213e);
-            border-bottom: 1px solid #2d3748; padding: 24px 32px; }}
-  header h1 {{ font-size: 1.6rem; font-weight: 700; color: #fff; }}
-  header p  {{ color: #94a3b8; margin-top: 4px; font-size: 0.9rem; }}
-  .container {{ max-width: 1100px; margin: 0 auto; padding: 32px 24px; }}
-  .grid-4 {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }}
-  .stat-card {{ background: #1e2535; border: 1px solid #2d3748; border-radius: 12px;
-                padding: 20px 24px; }}
-  .stat-card .label {{ font-size: 0.8rem; color: #94a3b8; text-transform: uppercase;
-                        letter-spacing: 0.05em; margin-bottom: 8px; }}
-  .stat-card .value {{ font-size: 2rem; font-weight: 700; }}
-  .value.green  {{ color: #34d399; }}
-  .value.red    {{ color: #f87171; }}
-  .value.blue   {{ color: #60a5fa; }}
-  .value.yellow {{ color: #fbbf24; }}
-  .charts-row {{ display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }}
-  @media (max-width: 700px) {{ .charts-row {{ grid-template-columns: 1fr; }} }}
-  .card {{ background: #1e2535; border: 1px solid #2d3748; border-radius: 12px;
-           padding: 24px; margin-bottom: 20px; }}
-  .card h2 {{ font-size: 1rem; font-weight: 600; margin-bottom: 16px; color: #cbd5e1; }}
-  .chart-wrap {{ position: relative; height: 260px; }}
-  .anomaly-card {{ border-left: 3px solid #f87171; }}
-  .card-header {{ display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }}
-  .badge {{ font-size: 0.75rem; font-weight: 700; padding: 3px 10px;
-            border-radius: 20px; background: #f87171; color: #fff; }}
-  .badge-danger {{ background: #f87171; }}
-  .muted {{ color: #64748b; font-size: 0.85rem; }}
-  .section-label {{ font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;
-                    letter-spacing: 0.05em; margin-bottom: 6px; }}
-  .log-block {{ background: #0d1117; border-radius: 8px; padding: 12px 16px;
-                font-family: "JetBrains Mono", "Fira Code", monospace; font-size: 0.78rem; }}
-  .log-line {{ color: #94a3b8; line-height: 1.8; }}
-  .log-line:hover {{ color: #e2e8f0; }}
-  ul {{ padding-left: 18px; }}
-  li {{ margin: 4px 0; font-size: 0.9rem; color: #fbbf24; }}
-  .tag {{ display: inline-block; background: #1a2a3a; border: 1px solid #2d4a6a;
-          color: #60a5fa; font-size: 0.78rem; padding: 3px 10px;
-          border-radius: 6px; margin: 3px; font-family: monospace; }}
-  .model-table {{ width: 100%; border-collapse: collapse; font-size: 0.9rem; }}
-  .model-table td {{ padding: 10px 14px; border-bottom: 1px solid #2d3748; }}
-  .model-table td:first-child {{ color: #94a3b8; width: 40%; }}
-  .no-anomaly {{ color: #34d399; font-size: 1rem; padding: 16px 0; }}
-  footer {{ text-align: center; color: #475569; font-size: 0.8rem;
-            padding: 32px; border-top: 1px solid #1e2535; margin-top: 16px; }}
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh}}
+a{{color:#60a5fa;text-decoration:none}}
+header{{background:linear-gradient(135deg,#1a1f2e,#16213e);border-bottom:1px solid #2d3748;padding:28px 32px}}
+header h1{{font-size:1.55rem;font-weight:700;color:#fff}}
+header .sub{{color:#94a3b8;margin-top:6px;font-size:0.88rem;line-height:1.5}}
+.container{{max-width:1100px;margin:0 auto;padding:32px 24px}}
+.intro{{background:#131c2e;border:1px solid #1e3a5f;border-radius:10px;padding:16px 20px;margin-bottom:28px;font-size:0.88rem;color:#93c5fd;line-height:1.7}}
+.intro strong{{color:#bfdbfe}}
+.health{{border-radius:12px;padding:18px 22px;margin-bottom:28px;display:flex;align-items:flex-start;gap:14px;border:1px solid}}
+.health .hicon{{font-size:1.8rem;line-height:1;min-width:36px}}
+.health .htitle{{font-weight:700;font-size:1rem;margin-bottom:4px}}
+.health .hmsg{{font-size:0.88rem;line-height:1.6;opacity:.9}}
+.grid-4{{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px;margin-bottom:8px}}
+.stat{{background:#1e2535;border:1px solid #2d3748;border-radius:12px;padding:20px 22px}}
+.stat .slb{{font-size:0.72rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}}
+.stat .val{{font-size:2rem;font-weight:700;margin-bottom:6px}}
+.stat .hint{{font-size:0.78rem;color:#475569;line-height:1.5}}
+.green{{color:#34d399}}.red{{color:#f87171}}.blue{{color:#60a5fa}}.yellow{{color:#fbbf24}}
+.note-row{{margin:10px 0 24px;font-size:0.82rem;color:#64748b;line-height:1.6;background:#151c2a;padding:10px 16px;border-radius:8px;border-left:3px solid #2d4a6a}}
+.charts-row{{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}}
+@media(max-width:680px){{.charts-row{{grid-template-columns:1fr}}}}
+.card{{background:#1e2535;border:1px solid #2d3748;border-radius:12px;padding:22px;margin-bottom:22px}}
+.card h2{{font-size:0.98rem;font-weight:600;color:#cbd5e1;margin-bottom:6px}}
+.card-hint{{font-size:0.82rem;color:#64748b;margin-bottom:16px;line-height:1.6}}
+.chart-wrap{{position:relative;height:250px}}
+.model-table{{width:100%;border-collapse:collapse;font-size:0.88rem}}
+.model-table td{{padding:10px 14px;border-bottom:1px solid #2d3748;vertical-align:top;line-height:1.5}}
+.model-table td:first-child{{color:#94a3b8;width:32%;font-weight:500}}
+.td-note{{font-size:0.78rem;color:#475569;margin-top:5px;line-height:1.5}}
+.anomaly-card{{background:#1e2535;border:1px solid #2d3748;border-left:4px solid #f87171;border-radius:12px;padding:22px;margin-bottom:18px}}
+.ac-header{{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}}
+.badge-danger{{font-size:0.72rem;font-weight:700;background:#f87171;color:#fff;padding:3px 10px;border-radius:20px}}
+.atype{{font-size:0.78rem;font-weight:600;background:#2d1515;color:#fca5a5;border:1px solid #7f1d1d;padding:3px 10px;border-radius:20px}}
+.muted{{color:#64748b;font-size:0.82rem}}
+.expl-box{{background:#0f1e32;border:1px solid #1e3a5f;border-radius:8px;padding:13px 16px;margin-bottom:14px}}
+.expl-label{{font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#60a5fa;margin-bottom:6px}}
+.expl-box p{{font-size:0.86rem;color:#93c5fd;line-height:1.65}}
+.ac-grid{{display:grid;grid-template-columns:1fr 1fr;gap:18px}}
+@media(max-width:580px){{.ac-grid{{grid-template-columns:1fr}}}}
+.slabel{{font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:8px}}
+ul{{padding-left:18px;margin-bottom:8px}}
+li{{margin:4px 0;font-size:0.86rem;color:#fbbf24;line-height:1.5}}
+.size-note{{font-size:0.8rem;color:#94a3b8;line-height:1.5;margin-top:8px}}
+.size-note strong{{color:#e2e8f0}}
+.log-block{{background:#0d1117;border-radius:8px;padding:11px 14px;font-family:"JetBrains Mono","Fira Code",monospace;font-size:0.74rem}}
+.log-line{{color:#4b5563;line-height:1.9}}.log-line:hover{{color:#94a3b8}}
+.tag{{display:inline-block;background:#1a2a3a;border:1px solid #2d4a6a;color:#60a5fa;font-size:0.76rem;padding:3px 10px;border-radius:6px;margin:3px;font-family:monospace}}
+.no-anomaly{{color:#34d399;font-size:0.92rem;padding:16px 0;line-height:1.6}}
+footer{{text-align:center;color:#374151;font-size:0.78rem;padding:28px;border-top:1px solid #1a2535;margin-top:8px}}
 </style>
 </head>
 <body>
 <header>
-  <h1>🔍 Loglizer — Anomaly Detection Report</h1>
-  <p>Personal Finance Management App &nbsp;·&nbsp; Generated {generated_at}</p>
+  <h1>&#x1F50D; Loglizer &mdash; Log Anomaly Detection Report</h1>
+  <p class="sub">Personal Finance Management Application &middot; Generated {generated_at}</p>
+  <p class="sub" style="margin-top:4px;color:#475569;font-size:0.78rem">Automated by the Loglizer ML pipeline &middot; Algorithm: PCA (Principal Component Analysis)</p>
 </header>
 
 <div class="container">
 
-  <!-- Stat cards -->
+  <div class="intro">
+    <strong>What is this report?</strong>
+    This report was automatically produced by the Loglizer anomaly detection pipeline. It analyses logs
+    generated by the Personal Finance Management application, learns what a normal user session looks like
+    using machine learning, and flags any session that deviates significantly from that pattern.
+    Every section below includes an explanation of what the numbers mean and how to interpret the findings.
+  </div>
+
+  <!-- Health banner -->
+  <div class="health" style="background:color-mix(in srgb,{health_color} 7%,#1e2535);border-color:color-mix(in srgb,{health_color} 35%,#2d3748)">
+    <div class="hicon">{health_icon}</div>
+    <div>
+      <div class="htitle" style="color:{health_color}">{health_label}</div>
+      <div class="hmsg">{health_msg}</div>
+    </div>
+  </div>
+
+  <!-- Stats -->
   <div class="grid-4">
-    <div class="stat-card">
-      <div class="label">Total Sessions</div>
-      <div class="value blue">{total}</div>
+    <div class="stat">
+      <div class="slb">Total Sessions</div>
+      <div class="val blue">{total}</div>
+      <div class="hint">A <em>session</em> is a group of log events that happened close together in time (within a 5-minute window). This is the total number of such groups found in the log file.</div>
     </div>
-    <div class="stat-card">
-      <div class="label">Normal Sessions</div>
-      <div class="value green">{normal_count}</div>
+    <div class="stat">
+      <div class="slb">Normal Sessions</div>
+      <div class="val green">{normal_count}</div>
+      <div class="hint">Sessions whose event pattern closely matched what the model learned from clean training data. These are fine &mdash; no action needed.</div>
     </div>
-    <div class="stat-card">
-      <div class="label">Anomalous Sessions</div>
-      <div class="value red">{anomaly_count}</div>
+    <div class="stat">
+      <div class="slb">Anomalous Sessions</div>
+      <div class="val red">{anomaly_count}</div>
+      <div class="hint">Sessions that deviated significantly from the normal pattern. Each one is broken down in detail below. These require investigation.</div>
     </div>
-    <div class="stat-card">
-      <div class="label">Anomaly Rate</div>
-      <div class="value yellow">{anomaly_rate}%</div>
+    <div class="stat">
+      <div class="slb">Anomaly Rate</div>
+      <div class="val yellow">{anomaly_rate}%</div>
+      <div class="hint">Percentage of sessions flagged as anomalous. Under 5% is low. Above 10% in a real system would be a serious concern requiring immediate action.</div>
     </div>
+  </div>
+  <div class="note-row">
+    <strong>How the model scores sessions:</strong> Each session is converted to a count vector (how many times each event type appeared). The PCA model then measures how different this vector is from the normal pattern it learned during training. That difference score is called the <strong>SPE (Squared Prediction Error)</strong>. Sessions with SPE above the trained threshold are flagged as anomalies.
   </div>
 
   <!-- Charts -->
   <div class="charts-row">
     <div class="card">
       <h2>Session Distribution</h2>
-      <div class="chart-wrap">
-        <canvas id="donutChart"></canvas>
-      </div>
+      <p class="card-hint">The proportion of normal (green) vs anomalous (red) sessions. In a healthy system you expect a dominant green slice. A growing red slice is a warning sign.</p>
+      <div class="chart-wrap"><canvas id="donutChart"></canvas></div>
     </div>
     <div class="card">
       <h2>Anomaly Types Detected</h2>
-      <div class="chart-wrap">
-        <canvas id="barChart"></canvas>
-      </div>
+      <p class="card-hint">What <em>kind</em> of anomalies were found. Brute-force and unauthorized access suggest an attack. DB timeout and server exceptions suggest a system failure. Traffic spikes suggest automation or flooding.</p>
+      <div class="chart-wrap"><canvas id="barChart"></canvas></div>
     </div>
   </div>
 
-  <!-- Model info -->
+  <!-- How the model works -->
   <div class="card">
-    <h2>Model Information</h2>
+    <h2>How the Detection Model Works</h2>
+    <p class="card-hint">This section explains the ML model so you can understand why sessions were flagged.</p>
     <table class="model-table">
-      <tr><td>Algorithm</td><td>PCA (Principal Component Analysis)</td></tr>
-      <tr><td>Training Sessions</td><td>{model_info.get("num_sessions", "N/A")}</td></tr>
-      <tr><td>Training Events</td><td>{model_info.get("num_events", "N/A")}</td></tr>
-      <tr><td>Event Templates</td><td>{len(model_info.get("event_templates", {}))}</td></tr>
-      <tr><td>Trained At</td><td>{model_info.get("trained_at", "N/A")}</td></tr>
+      <tr>
+        <td>Algorithm</td>
+        <td>PCA &mdash; Principal Component Analysis
+          <div class="td-note">An unsupervised learning method. It was trained <em>only on normal logs</em> &mdash; it has never seen attacks or failures. It learned the mathematical fingerprint of a normal session: which events appear, how often, and in what combinations. When it encounters a new session, it measures how much that session differs from its learned fingerprint. A large difference means the session is anomalous.</div>
+        </td>
+      </tr>
+      <tr>
+        <td>Training Data</td>
+        <td>{model_info.get("num_sessions","N/A")} sessions &middot; {model_info.get("num_events","N/A")} log events
+          <div class="td-note">The model was trained exclusively on normal user behavior: login &rarr; browse dashboard &rarr; add expenses &rarr; add income &rarr; create budgets &rarr; generate reports &rarr; logout. Because it only knows normal behavior, anything unusual stands out clearly.</div>
+        </td>
+      </tr>
+      <tr>
+        <td>Event Vocabulary</td>
+        <td>{len(model_info.get("event_templates",{}))} unique event types
+          <div class="td-note">Each distinct type of log line is treated as one feature (e.g. "Login failed", "Database timeout", "GET /dashboard"). The model uses the count of each event type per session as its input data.</div>
+        </td>
+      </tr>
+      <tr>
+        <td>Trained At</td>
+        <td>{model_info.get("trained_at","N/A")}</td>
+      </tr>
     </table>
   </div>
 
-  <!-- Anomaly cards -->
+  <!-- Anomaly details -->
   <div class="card">
-    <h2>Detected Anomalies</h2>
+    <h2>Detected Anomalies &mdash; Full Breakdown</h2>
+    <p class="card-hint">Each card below is one flagged session. It tells you <em>what type of anomaly</em> was detected, <em>what it means in plain language</em>, <em>why Loglizer flagged it</em>, and shows you the <em>actual log lines</em> as evidence. Use this to understand what happened and decide what action to take.</p>
     {anomaly_cards}
   </div>
 
   <!-- Event templates -->
   <div class="card">
-    <h2>Event Templates Used</h2>
-    <div>{templates_html}</div>
+    <h2>Event Types the Model Recognises</h2>
+    <p class="card-hint">These are all the distinct log patterns the model knows. When a session contains events that are rare or absent in normal sessions (like &ldquo;Login failed&rdquo; or &ldquo;Database connection timeout&rdquo;), the model&rsquo;s error score rises and the session gets flagged.</p>
+    <div style="margin-top:8px">{templates_html}</div>
   </div>
 
 </div>
 
-<footer>Automatically generated by Loglizer Anomaly Detection Pipeline</footer>
+<footer>
+  Automatically generated by Loglizer Anomaly Detection Pipeline &middot;
+  Model: PCA &middot; Framework: <a href="https://github.com/logpai/loglizer">Loglizer</a>
+</footer>
 
 <script>
 const donutCtx = document.getElementById('donutChart').getContext('2d');
 new Chart(donutCtx, {{
   type: 'doughnut',
   data: {{
-    labels: ['Normal', 'Anomaly'],
+    labels: ['Normal ({normal_count})', 'Anomaly ({anomaly_count})'],
     datasets: [{{
       data: [{normal_count}, {anomaly_count}],
-      backgroundColor: ['#34d399', '#f87171'],
-      borderColor: ['#1e2535', '#1e2535'],
+      backgroundColor: ['#34d399','#f87171'],
+      borderColor: ['#1e2535','#1e2535'],
       borderWidth: 3
     }}]
   }},
   options: {{
     responsive: true, maintainAspectRatio: false,
-    plugins: {{
-      legend: {{ labels: {{ color: '#94a3b8' }} }}
-    }}
+    plugins: {{ legend: {{ labels: {{ color: '#94a3b8', font: {{ size: 13 }} }} }} }}
   }}
 }});
-
 const barCtx = document.getElementById('barChart').getContext('2d');
 new Chart(barCtx, {{
   type: 'bar',
   data: {{
     labels: {bar_labels},
-    datasets: [{{
-      label: 'Count',
-      data: {bar_values},
-      backgroundColor: '#f87171',
-      borderRadius: 6
-    }}]
+    datasets: [{{ label: 'Sessions', data: {bar_values}, backgroundColor: '#f87171', borderRadius: 6 }}]
   }},
   options: {{
     responsive: true, maintainAspectRatio: false,
     plugins: {{ legend: {{ display: false }} }},
     scales: {{
-      x: {{ ticks: {{ color: '#94a3b8' }}, grid: {{ color: '#2d3748' }} }},
+      x: {{ ticks: {{ color: '#94a3b8' }}, grid: {{ color: '#1e2535' }} }},
       y: {{ ticks: {{ color: '#94a3b8', stepSize: 1 }}, grid: {{ color: '#2d3748' }} }}
     }}
   }}
