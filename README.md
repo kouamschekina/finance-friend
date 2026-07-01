@@ -135,6 +135,8 @@ To trigger manually: go to **Actions → Loglizer Anomaly Detection → Run work
 
 ---
 
+
+
 ## Model
 
 Uses **PCA (Principal Component Analysis)** from Loglizer. Trained exclusively on normal logs, it learns the expected event distribution per session. Sessions that deviate significantly from this distribution are flagged as anomalies.
