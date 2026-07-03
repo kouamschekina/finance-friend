@@ -98,10 +98,12 @@ What the config does:
    lockfiles, `dist/`, `dev-dist/`, `.git/`. These are either third-party
    code we don't own or build artefacts; scanning them only produces noise.
 
-Gitleaks is invoked with `--config .gitleaks.toml --verbose --report-format
-json --report-path=gitleaks-report.json`. The `|| true` guard ensures the
-job does not abort before Stage 2 runs — the classifier, not the scanner,
-makes the final pass/fail decision.
+Gitleaks is invoked with `dir --source . --no-git` so it scans only the
+current working tree, **not** the full git history. This prevents old
+secrets committed in earlier commits from re-firing on every CI run — the
+pipeline catches *new* leaks, not historical ones. The `|| true` guard
+ensures the job does not abort before Stage 2 runs — the classifier, not
+the scanner, makes the final pass/fail decision.
 
 ---
 

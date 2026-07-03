@@ -13,19 +13,27 @@ The classifier is a lightweight, dependency-free heuristic ML model that
 mirrors the TF-IDF + proximity-analysis approach described in the syllabus:
 
   * Feature 1 - Path context   : is the finding inside a test/fixture/mock
-                                 directory? (strong negative signal)
+                                  directory? (strong negative signal)
   * Feature 2 - Value context  : does the captured secret look like a known
-                                 placeholder string? (very strong negative)
+                                  placeholder string? (very strong negative)
   * Feature 3 - Syntax context : is the line an assertion / expected-value
-                                 statement? (negative signal)
+                                  statement? (negative signal)
   * Feature 4 - Entropy context : real high-entropy keys score higher than
                                   low-entropy human words.
   * Feature 5 - Provider context: known provider prefixes (AKIA, sk_live_,
                                   ghp_, xoxb-, AIza...) boost the score.
+  * Feature 6 - File context   : .env / config files boost the score.
+  * Feature 7 - Docs context   : markdown / documentation files that merely
+                                  *describe* secrets get a negative signal.
 
 A finding whose total score >= 0 is classified REAL_LEAK and fails the
 CI/CD pipeline; anything below 0 is quarantined as a TEST_FIXTURE and the
 build passes.
+
+Outputs:
+  - Console summary (human-readable, shown in the CI log)
+  - secret-scan-verdict.json  (machine-readable full breakdown)
+  - secret-scan-report.html   (visual, presentation-ready HTML report)
 
 Usage:
     python filter_secrets.py [path/to/gitleaks-report.json]
@@ -36,6 +44,8 @@ Exit codes:
     2  - invalid / unreadable report (treated as clean for safety)
 """
 
+import datetime
+import html
 import json
 import math
 import os
@@ -72,6 +82,12 @@ ASSERTION_TOKENS = (
     "expected", "assert", "expect(", "should.equal",
     "tobe(", "toequal(", "matchsnapshot", "snapshot",
     "mockreturnvalue", "mockimplementation",
+)
+
+# Documentation file extensions — these files *describe* secrets, they don't
+# *contain* them. A strong negative signal.
+DOCS_EXTENSIONS = (
+    ".md", ".markdown", ".rst", ".txt", ".adoc",
 )
 
 # Known cloud / SaaS provider key prefixes. Their presence is a strong
@@ -158,7 +174,7 @@ def analyze_context(finding: dict) -> tuple[str, int, dict]:
     )
     if provider_hit:
         score += 3
-        features["provider_context"] = f"+3 (provider pattern matched)"
+        features["provider_context"] = "+3 (provider pattern matched)"
     else:
         features["provider_context"] = "0 (no provider pattern)"
 
@@ -168,6 +184,15 @@ def analyze_context(finding: dict) -> tuple[str, int, dict]:
         features["file_context"] = "+1 (env/config file)"
     else:
         features["file_context"] = "0"
+
+    # Feature 7 - Documentation context (negative) ---------------------------
+    # Markdown / docs files that *mention* secrets in prose are not leaks.
+    is_doc = any(file_path.endswith(ext) for ext in DOCS_EXTENSIONS)
+    if is_doc:
+        score -= 4
+        features["docs_context"] = "-4 (documentation file)"
+    else:
+        features["docs_context"] = "0"
 
     features["total_score"] = score
     classification = "REAL_LEAK" if score >= 0 else "TEST_FIXTURE"
@@ -189,7 +214,6 @@ def load_findings(report_path: str) -> list[dict]:
         return []
     if isinstance(data, list):
         return data
-    # Some Gitleaks versions wrap results under a key.
     if isinstance(data, dict):
         for key in ("findings", "results", "leaks"):
             if key in data and isinstance(data[key], list):
@@ -197,15 +221,213 @@ def load_findings(report_path: str) -> list[dict]:
     return []
 
 
-def render_summary(findings, real_leaks, quarantined) -> str:
+# ---------------------------------------------------------------------------
+# Console report
+# ---------------------------------------------------------------------------
+
+def render_console_summary(findings, real_leaks, quarantined) -> str:
     lines = []
-    lines.append("\n=== SECURITY ANOMALY SUMMARY ===")
-    lines.append(f"Total Raw Detections: {len(findings)}")
-    lines.append(f"Verified Real Leaks:  {len(real_leaks)}")
-    lines.append(f"Quarantined (Mocks):  {len(quarantined)}")
-    lines.append("================================\n")
+    lines.append("")
+    lines.append("=" * 60)
+    lines.append("   SECURITY ANOMALY SUMMARY - AI-Enhanced Secret Detection")
+    lines.append("=" * 60)
+    lines.append("")
+    lines.append(f"  Stage 1 (Gitleaks raw detections):  {len(findings)}")
+    lines.append(f"  Stage 2 (AI Classifier verdict):")
+    lines.append(f"    -> Verified Real Leaks:            {len(real_leaks)}")
+    lines.append(f"    -> Quarantined (test fixtures):    {len(quarantined)}")
+    lines.append("")
+    lines.append("-" * 60)
+    lines.append("")
+
+    if quarantined:
+        lines.append("QUARANTINED FINDINGS (classified as TEST_FIXTURE):")
+        lines.append("-" * 60)
+        for i, f in enumerate(quarantined, 1):
+            lines.append(f"  [{i}] File: {f.get('File')}")
+            lines.append(f"      Rule: {f.get('RuleID', '?')}")
+            lines.append(f"      Score: {f['_score']}  (below 0 = safe)")
+            lines.append(f"      Features:")
+            for k, v in f["_features"].items():
+                if k != "total_score":
+                    lines.append(f"          {k}: {v}")
+            lines.append("")
+
+    if real_leaks:
+        lines.append("REAL LEAKS DETECTED (classified as REAL_LEAK):")
+        lines.append("-" * 60)
+        for i, leak in enumerate(real_leaks, 1):
+            link = leak.get("LinkToLine") or leak.get("StartLine", "?")
+            lines.append(f"  [{i}] File: {leak.get('File')} | Line: {link}")
+            lines.append(f"      Rule: {leak.get('RuleID', '?')}")
+            lines.append(f"      Score: {leak['_score']}  (>= 0 = dangerous)")
+            lines.append(f"      Features:")
+            for k, v in leak["_features"].items():
+                if k != "total_score":
+                    lines.append(f"          {k}: {v}")
+            lines.append("")
+
+    lines.append("=" * 60)
+    if real_leaks:
+        lines.append("  RESULT: BUILD FAILED - Real secrets detected!")
+    else:
+        lines.append("  RESULT: BUILD PASSED - All findings are safe test fixtures.")
+    lines.append("=" * 60)
+    lines.append("")
     return "\n".join(lines)
 
+
+# ---------------------------------------------------------------------------
+# HTML report (presentation-ready)
+# ---------------------------------------------------------------------------
+
+def generate_html_report(findings, real_leaks, quarantined) -> str:
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    total = len(findings)
+    real_count = len(real_leaks)
+    quar_count = len(quarantined)
+
+    def finding_rows(items, cls):
+        rows = ""
+        for i, f in enumerate(items, 1):
+            file_path = html.escape(str(f.get("File", "?")))
+            rule_id = html.escape(str(f.get("RuleID", "?")))
+            line_no = f.get("StartLine", "?")
+            score = f["_score"]
+            secret = html.escape(str(f.get("Secret", "")))
+            # Truncate long secrets for display
+            if len(secret) > 60:
+                secret = secret[:57] + "..."
+            features_html = ""
+            for k, v in f["_features"].items():
+                if k != "total_score":
+                    features_html += f"<div class='feat'><b>{html.escape(k)}</b>: {html.escape(str(v))}</div>"
+            badge = "real" if cls == "REAL_LEAK" else "safe"
+            rows += f"""
+            <tr class="{badge}-row">
+              <td>{i}</td>
+              <td class="mono">{file_path}</td>
+              <td>{line_no}</td>
+              <td>{rule_id}</td>
+              <td class="mono secret">{secret}</td>
+              <td class="score {'score-bad' if score >= 0 else 'score-good'}">{score}</td>
+              <td><span class="badge {badge}">{cls}</span></td>
+              <td class="features">{features_html}</td>
+            </tr>"""
+        return rows
+
+    all_rows = ""
+    if real_leaks:
+        all_rows += finding_rows(real_leaks, "REAL_LEAK")
+    if quarantined:
+        all_rows += finding_rows(quarantined, "TEST_FIXTURE")
+
+    verdict_color = "#e74c3c" if real_count > 0 else "#27ae60"
+    verdict_text = "BUILD FAILED" if real_count > 0 else "BUILD PASSED"
+    verdict_icon = "&#10060;" if real_count > 0 else "&#9989;"
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Secret Detection Report - AI-Enhanced Pipeline</title>
+<style>
+  :root {{
+    --bg: #0d1117; --card: #161b22; --border: #30363d;
+    --text: #c9d1d9; --text-dim: #8b949e; --accent: #58a6ff;
+    --red: #f85149; --green: #3fb950; --yellow: #d29922;
+  }}
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{
+    font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); padding: 2rem; line-height: 1.6;
+  }}
+  h1 {{ font-size: 1.6rem; margin-bottom: 0.25rem; }}
+  h2 {{ font-size: 1.1rem; margin: 1.5rem 0 0.75rem; color: var(--text-dim); }}
+  .subtitle {{ color: var(--text-dim); margin-bottom: 1.5rem; font-size: 0.9rem; }}
+  .cards {{ display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }}
+  .card {{
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1rem 1.5rem; min-width: 180px;
+  }}
+  .card .num {{ font-size: 2rem; font-weight: 700; }}
+  .card .label {{ color: var(--text-dim); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }}
+  .card.total .num {{ color: var(--accent); }}
+  .card.real .num {{ color: var(--red); }}
+  .card.quar .num {{ color: var(--green); }}
+  .verdict {{
+    background: var(--card); border: 2px solid {verdict_color}; border-radius: 8px;
+    padding: 1rem 1.5rem; margin-bottom: 1.5rem; font-size: 1.2rem; font-weight: 700;
+    color: {verdict_color};
+  }}
+  table {{ width: 100%; border-collapse: collapse; background: var(--card); border-radius: 8px; overflow: hidden; }}
+  th, td {{ padding: 0.6rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.85rem; }}
+  th {{ background: #21262d; color: var(--text-dim); font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.03em; }}
+  .mono {{ font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.8rem; }}
+  .secret {{ color: var(--yellow); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+  .badge {{ padding: 0.15rem 0.6rem; border-radius: 12px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }}
+  .badge.real {{ background: rgba(248,81,73,0.15); color: var(--red); border: 1px solid var(--red); }}
+  .badge.safe {{ background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid var(--green); }}
+  .real-row {{ background: rgba(248,81,73,0.05); }}
+  .safe-row {{ background: rgba(63,185,80,0.05); }}
+  .score-bad {{ color: var(--red); font-weight: 700; }}
+  .score-good {{ color: var(--green); font-weight: 700; }}
+  .features {{ max-width: 280px; }}
+  .feat {{ font-size: 0.75rem; color: var(--text-dim); margin: 0.1rem 0; }}
+  .feat b {{ color: var(--text); }}
+  .pipeline {{ margin: 1.5rem 0; padding: 1rem; background: var(--card); border-radius: 8px; border: 1px solid var(--border); }}
+  .pipeline .step {{ display: inline-block; padding: 0.3rem 0.8rem; border-radius: 4px; font-size: 0.8rem; margin: 0.2rem; }}
+  .pipeline .s1 {{ background: rgba(88,166,255,0.15); color: var(--accent); border: 1px solid var(--accent); }}
+  .pipeline .s2 {{ background: rgba(210,153,34,0.15); color: var(--yellow); border: 1px solid var(--yellow); }}
+  .pipeline .arrow {{ color: var(--text-dim); margin: 0 0.3rem; }}
+  footer {{ margin-top: 2rem; color: var(--text-dim); font-size: 0.8rem; text-align: center; }}
+</style>
+</head>
+<body>
+  <h1>AI-Enhanced Secret Detection Report</h1>
+  <p class="subtitle">Generated {now} &middot; Stage 1: Gitleaks &rarr; Stage 2: Contextual ML Classifier</p>
+
+  <div class="pipeline">
+    <span class="step s1">Stage 1: Gitleaks (regex + entropy)</span>
+    <span class="arrow">&rarr;</span>
+    <span class="step s2">Stage 2: filter_secrets.py (AI context scoring)</span>
+    <span class="arrow">&rarr;</span>
+    <span class="step" style="background:rgba({verdict_color == '#e74c3c' and '248,81,73' or '63,185,80'},0.15);color:{verdict_color};border:1px solid {verdict_color}">{verdict_text}</span>
+  </div>
+
+  <div class="cards">
+    <div class="card total"><div class="num">{total}</div><div class="label">Raw Detections</div></div>
+    <div class="card real"><div class="num">{real_count}</div><div class="label">Real Leaks</div></div>
+    <div class="card quar"><div class="num">{quar_count}</div><div class="label">Quarantined</div></div>
+  </div>
+
+  <div class="verdict">{verdict_icon} {verdict_text} &mdash; {real_count} real leak(s), {quar_count} quarantined fixture(s)</div>
+
+  <h2>Detailed Findings</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>File</th><th>Line</th><th>Rule</th>
+        <th>Secret (truncated)</th><th>Score</th><th>Verdict</th><th>AI Feature Breakdown</th>
+      </tr>
+    </thead>
+    <tbody>
+      {all_rows if all_rows else '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:2rem">No findings to report.</td></tr>'}
+    </tbody>
+  </table>
+
+  <footer>
+    AI-Enhanced Secret Detection Pipeline &middot; Gitleaks v8.18.2 + Contextual ML Classifier
+    <br>Features: path context, value context, syntax context, entropy, provider format, file context, docs context
+  </footer>
+</body>
+</html>"""
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
 def main() -> None:
     report_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_REPORT
@@ -232,57 +454,35 @@ def main() -> None:
         else:
             quarantined.append(finding)
 
-    print(render_summary(findings, real_leaks, quarantined))
+    # Console output
+    print(render_console_summary(findings, real_leaks, quarantined))
 
-    # Detailed breakdown for the CI log / presentation demo.
-    if quarantined:
-        print("--- Quarantined findings (classified as TEST_FIXTURE) ---")
-        for f in quarantined:
-            print(
-                f"  - {f.get('File')} | score={f['_score']} | "
-                f"{f['_features']}"
-            )
-        print()
+    # Machine-readable JSON verdict
+    verdict = {
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "total_raw_detections": len(findings),
+        "real_leaks_count": len(real_leaks),
+        "quarantined_count": len(quarantined),
+        "verdict": "BUILD_FAILED" if real_leaks else "BUILD_PASSED",
+        "real_leaks": real_leaks,
+        "quarantined": quarantined,
+    }
+    try:
+        with open("secret-scan-verdict.json", "w", encoding="utf-8") as out:
+            json.dump(verdict, out, indent=2)
+    except OSError:
+        pass
+
+    # HTML report
+    try:
+        with open("secret-scan-report.html", "w", encoding="utf-8") as out:
+            out.write(generate_html_report(findings, real_leaks, quarantined))
+    except OSError:
+        pass
 
     if real_leaks:
-        print("CRITICAL: Real secrets exposed in codebase!")
-        for leak in real_leaks:
-            link = leak.get("LinkToLine") or leak.get("StartLine") or "?"
-            print(f"  - File: {leak.get('File')} | Line: {link} | score={leak['_score']}")
-            print(f"    features: {leak['_features']}")
-        # Persist a machine-readable quarantine/verdict report for artifacts.
-        try:
-            with open("secret-scan-verdict.json", "w", encoding="utf-8") as out:
-                json.dump(
-                    {
-                        "total": len(findings),
-                        "real_leaks": len(real_leaks),
-                        "quarantined": len(quarantined),
-                        "real_leaks_detail": real_leaks,
-                        "quarantined_detail": quarantined,
-                    },
-                    out,
-                    indent=2,
-                )
-        except OSError:
-            pass
         sys.exit(1)
     else:
-        print("Success: All raw findings were classified as safe test fixtures.")
-        try:
-            with open("secret-scan-verdict.json", "w", encoding="utf-8") as out:
-                json.dump(
-                    {
-                        "total": len(findings),
-                        "real_leaks": 0,
-                        "quarantined": len(quarantined),
-                        "quarantined_detail": quarantined,
-                    },
-                    out,
-                    indent=2,
-                )
-        except OSError:
-            pass
         sys.exit(0)
 
 
