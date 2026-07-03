@@ -1,0 +1,52 @@
+# .gitleaks.toml
+# Project Secret Scanning Rules
+# Configuration for Gitleaks (Stage 1 - Deterministic Engine) of the
+# AI-enhanced secret detection pipeline. See docs/secret-detection.md.
+
+title = "Project Secret Scanning Rules"
+
+# Extend the default Gitleaks ruleset so we catch well-known provider
+# patterns (AWS, Stripe, GitHub, Google, Slack, etc.) in addition to the
+# custom generic rule below. This maximises recall in Stage 1; the
+# contextual classifier in filter_secrets.py then trims the false positives.
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# Custom generic rule: catches assignments like
+#   api_key = "AKIA..."
+#   const password = "supersecretvalue123"
+#   "token": "ghp_xxxxxxxxxxxxxxxxxxxx"
+# The capture group #2 is the secret value reported to the classifier.
+# ---------------------------------------------------------------------------
+[[rules]]
+    id = "generic-api-key"
+    description = "Detected a potential API Key or Token"
+    regex = '''(?i)(api_key|secret|password|token|credential|passwd)\s*[:=]\s*['"]([A-Za-z0-9%_+./-]{16,})['"]'''
+    secretGroup = 2
+    keywords = [
+        "api_key",
+        "apikey",
+        "secret",
+        "password",
+        "token",
+        "credential",
+        "passwd",
+    ]
+    tags = ["key", "generic"]
+
+# ---------------------------------------------------------------------------
+# Allowlist: paths we never want Gitleaks to even look at. These are either
+# dependency folders, build output, or vendored third-party code that we do
+# not own and cannot fix.
+# ---------------------------------------------------------------------------
+[allowlist]
+description = "Ignored paths"
+paths = [
+    '''node_modules/.*''',
+    '''bun\.lock.*''',
+    '''package-lock\.json''',
+    '''dist/.*''',
+    '''dev-dist/.*''',
+    '''\.git/.*''',
+]

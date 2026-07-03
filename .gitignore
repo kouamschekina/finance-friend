@@ -28,3 +28,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Secret detection demo file (contains synthetic fake key for CI demo)
+src/config.js
+secret-scan-verdict.json
+gitleaks-report.json
