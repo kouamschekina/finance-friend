@@ -39,7 +39,7 @@ jobs:
           # `dir --no-git` scans only the current working tree (no git
           # history), so previously-committed secrets don't re-fire.
           # `|| true` keeps the job alive so the AI filter can decide.
-          ./gitleaks dir --source . --config .gitleaks.toml --no-git --verbose --report-format json --report-path=gitleaks-report.json || true
+          ./gitleaks detect --source . --config .gitleaks.toml --no-git --verbose --report-format json --report-path=gitleaks-report.json || true
           echo "---- Gitleaks raw report ----"
           if [ -f gitleaks-report.json ]; then
             cat gitleaks-report.json
