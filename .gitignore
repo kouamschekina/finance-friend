@@ -9,6 +9,8 @@ lerna-debug.log*
 
 # ML generated files
 ml/model.pkl
+ml/secret_classifier_model.pkl
+ml/secret_classifier_dataset.json
 reports/report.md
 reports/anomalies.json
 reports/summary.json
@@ -33,3 +35,4 @@ dist-ssr
 src/config.js
 secret-scan-verdict.json
 gitleaks-report.json
+secret-scan-report.html

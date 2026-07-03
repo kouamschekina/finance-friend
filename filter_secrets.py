@@ -2,33 +2,20 @@
 """
 filter_secrets.py
 =================
-Stage 2 - Contextual AI/ML Classifier for the secret-detection pipeline.
+Stage 2 - Contextual ML Classifier for the secret-detection pipeline.
 
 It consumes the JSON report produced by Gitleaks (Stage 1, the deterministic
-regex/entropy engine) and applies an NLP-style contextual scoring model to
-decide whether each raw finding is a *real* leaked secret or a harmless
-test fixture / mock / placeholder.
+regex/entropy engine) and uses a **trained scikit-learn model** to classify
+each finding as a REAL_LEAK or a TEST_FIXTURE.
 
-The classifier is a lightweight, dependency-free heuristic ML model that
-mirrors the TF-IDF + proximity-analysis approach described in the syllabus:
+The model is a TF-IDF + LogisticRegression pipeline trained by
+`train_secret_classifier.py` and serialized to `ml/secret_classifier_model.pkl`.
+At CI runtime this script loads the pickled model and calls `predict()` on
+each finding — a standard ML inference workflow.
 
-  * Feature 1 - Path context   : is the finding inside a test/fixture/mock
-                                  directory? (strong negative signal)
-  * Feature 2 - Value context  : does the captured secret look like a known
-                                  placeholder string? (very strong negative)
-  * Feature 3 - Syntax context : is the line an assertion / expected-value
-                                  statement? (negative signal)
-  * Feature 4 - Entropy context : real high-entropy keys score higher than
-                                  low-entropy human words.
-  * Feature 5 - Provider context: known provider prefixes (AKIA, sk_live_,
-                                  ghp_, xoxb-, AIza...) boost the score.
-  * Feature 6 - File context   : .env / config files boost the score.
-  * Feature 7 - Docs context   : markdown / documentation files that merely
-                                  *describe* secrets get a negative signal.
-
-A finding whose total score >= 0 is classified REAL_LEAK and fails the
-CI/CD pipeline; anything below 0 is quarantined as a TEST_FIXTURE and the
-build passes.
+If the model file is missing (e.g. first run, or running locally without
+training), the script falls back to a heuristic scoring mode so the pipeline
+never breaks.
 
 Outputs:
   - Console summary (human-readable, shown in the CI log)
@@ -41,7 +28,6 @@ Usage:
 Exit codes:
     0  - no real leaks (clean build)
     1  - at least one real leak detected (blocks the pipeline)
-    2  - invalid / unreadable report (treated as clean for safety)
 """
 
 import datetime
@@ -49,66 +35,46 @@ import html
 import json
 import math
 import os
+import pickle
 import re
 import sys
 from collections import Counter
 
-# Default report location written by the GitHub Actions workflow.
 DEFAULT_REPORT = "gitleaks-report.json"
+DEFAULT_MODEL = "ml/secret_classifier_model.pkl"
 
 # ---------------------------------------------------------------------------
-# Context feature vocabulary (the "training data" of our heuristic model).
-# These tokens are what a TF-IDF classifier would learn to weight heavily
-# for the "test fixture" class. We hard-code the learned weights here so the
-# model runs with zero external dependencies.
+# Fallback heuristic features (used only if the trained model is missing)
 # ---------------------------------------------------------------------------
 TEST_PATH_TOKENS = (
     "test", "fixture", "fixtures", "mock", "mocks",
     "example", "examples", "spec", "specs", "sample", "samples",
     "__tests__", "stubs", "fakes",
 )
-
 PLACEHOLDER_TOKENS = (
     "dummy", "placeholder", "your_key", "your-key", "yourkey",
     "my_secret", "mysecret", "changeme", "change_me",
-    "abcdef", "abcdefg", "abcdefgh", "123456", "1234567", "12345678",
-    "test_key", "testkey", "example_key", "examplekey",
-    "xxxx", "xxxxx", "xxxxxxxx", "000000", "111111",
-    "lorem", "ipsum", "foobar", "foobaz", "barbaz",
-    "example", "sample", "demo", "tutorial",
+    "abcdef", "123456", "test_key", "example", "sample", "demo",
+    "xxxx", "lorem", "ipsum", "foobar",
 )
-
 ASSERTION_TOKENS = (
     "expected", "assert", "expect(", "should.equal",
-    "tobe(", "toequal(", "matchsnapshot", "snapshot",
-    "mockreturnvalue", "mockimplementation",
+    "tobe(", "toequal(", "matchsnapshot", "mockreturnvalue",
 )
-
-# Documentation file extensions — these files *describe* secrets, they don't
-# *contain* them. A strong negative signal.
-DOCS_EXTENSIONS = (
-    ".md", ".markdown", ".rst", ".txt", ".adoc",
-)
-
-# Known cloud / SaaS provider key prefixes. Their presence is a strong
-# *positive* signal that the captured string is a genuine credential format.
+DOCS_EXTENSIONS = (".md", ".markdown", ".rst", ".txt", ".adoc")
 PROVIDER_PATTERNS = (
-    re.compile(r"akia[0-9a-z]{16}"),          # AWS access key id
-    re.compile(r"sk_live_[0-9a-zA-Z]{24,}"),  # Stripe live secret key
-    re.compile(r"sk_test_[0-9a-zA-Z]{24,}"),  # Stripe test secret key
-    re.compile(r"ghp_[0-9a-zA-Z]{36}"),       # GitHub personal access token
-    re.compile(r"gho_[0-9a-zA-Z]{36}"),       # GitHub OAuth token
-    re.compile(r"ghs_[0-9a-zA-Z]{36}"),       # GitHub server-to-server token
-    re.compile(r"xox[baprs]-[0-9a-zA-Z-]+"),  # Slack token
-    re.compile(r"aiza[0-9a-z_\\-]{35}"),      # Google API key
-    re.compile(r"ya29\.[0-9a-z_\\-]+"),       # Google OAuth access token
-    re.compile(r"eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}"),  # JWT
+    re.compile(r"akia[0-9a-z]{16}"),
+    re.compile(r"sk_live_[0-9a-zA-Z]{24,}"),
+    re.compile(r"sk_test_[0-9a-zA-Z]{24,}"),
+    re.compile(r"ghp_[0-9a-zA-Z]{36}"),
+    re.compile(r"gho_[0-9a-zA-Z]{36}"),
+    re.compile(r"xox[baprs]-[0-9a-zA-Z-]+"),
+    re.compile(r"aiza[0-9a-z_\\-]{35}"),
+    re.compile(r"eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}"),
 )
 
 
 def shannon_entropy(data: str) -> float:
-    """Shannon entropy in bits per character - a classic secret-detection
-    signal. Real keys are high-entropy; placeholder words are low-entropy."""
     if not data:
         return 0.0
     counts = Counter(data)
@@ -116,46 +82,47 @@ def shannon_entropy(data: str) -> float:
     return -sum((c / length) * math.log2(c / length) for c in counts.values())
 
 
-def analyze_context(finding: dict) -> tuple[str, int, dict]:
-    """Score a single Gitleaks finding and return
-    (classification, score, feature_breakdown)."""
-    file_path = (finding.get("File") or finding.get("file") or "").lower()
-    line_content = (finding.get("Line") or finding.get("line") or "").lower()
-    secret_value = (finding.get("Secret") or finding.get("secret") or "").lower()
-    rule_id = (finding.get("RuleID") or finding.get("rule_id") or "").lower()
+def build_text_feature(finding: dict) -> str:
+    """Combine file path + line content + secret into a single text document
+    for TF-IDF vectorization. Must match the function used in training."""
+    file_path = finding.get("File") or finding.get("file") or ""
+    line_content = finding.get("Line") or finding.get("line") or ""
+    secret = finding.get("Secret") or finding.get("secret") or ""
+    return f"{file_path} {line_content} {secret}"
+
+
+def heuristic_classify(finding: dict) -> tuple[str, int, dict]:
+    """Fallback heuristic classifier (used only if the trained model is
+    missing). Same feature structure as the trained model but with
+    hand-coded weights."""
+    file_path = (finding.get("File") or "").lower()
+    line_content = (finding.get("Line") or "").lower()
+    secret_value = (finding.get("Secret") or "").lower()
 
     features = {}
     score = 0
 
-    # Feature 1 - Path context ------------------------------------------------
     path_hit = next((t for t in TEST_PATH_TOKENS if t in file_path), None)
     if path_hit:
         score -= 3
-        features["path_context"] = f"-3 (test path token: '{path_hit}')"
+        features["path_context"] = f"-3 (test path: '{path_hit}')"
     else:
         features["path_context"] = "0 (production path)"
 
-    # Feature 2 - Placeholder value context -----------------------------------
-    placeholder_hit = next(
-        (p for p in PLACEHOLDER_TOKENS if p in secret_value), None
-    )
+    placeholder_hit = next((p for p in PLACEHOLDER_TOKENS if p in secret_value), None)
     if placeholder_hit:
         score -= 5
-        features["value_context"] = f"-5 (placeholder token: '{placeholder_hit}')"
+        features["value_context"] = f"-5 (placeholder: '{placeholder_hit}')"
     else:
-        features["value_context"] = "0 (no placeholder token)"
+        features["value_context"] = "0 (no placeholder)"
 
-    # Feature 3 - Assertion / test-syntax context ----------------------------
-    assertion_hit = next(
-        (a for a in ASSERTION_TOKENS if a in line_content), None
-    )
+    assertion_hit = next((a for a in ASSERTION_TOKENS if a in line_content), None)
     if assertion_hit:
         score -= 2
-        features["syntax_context"] = f"-2 (assertion token: '{assertion_hit}')"
+        features["syntax_context"] = f"-2 (assertion: '{assertion_hit}')"
     else:
-        features["syntax_context"] = "0 (no assertion token)"
+        features["syntax_context"] = "0"
 
-    # Feature 4 - Entropy context ---------------------------------------------
     entropy = shannon_entropy(secret_value)
     if entropy >= 3.5:
         score += 2
@@ -167,26 +134,19 @@ def analyze_context(finding: dict) -> tuple[str, int, dict]:
         score -= 1
         features["entropy_context"] = f"-1 (low entropy: {entropy:.2f})"
 
-    # Feature 5 - Provider format context -------------------------------------
-    provider_hit = next(
-        (p.pattern for p in PROVIDER_PATTERNS if p.search(secret_value)),
-        None,
-    )
+    provider_hit = next((p.pattern for p in PROVIDER_PATTERNS if p.search(secret_value)), None)
     if provider_hit:
         score += 3
         features["provider_context"] = "+3 (provider pattern matched)"
     else:
-        features["provider_context"] = "0 (no provider pattern)"
+        features["provider_context"] = "0"
 
-    # Feature 6 - .env / config file context (mild positive) ------------------
     if file_path.endswith((".env", ".env.local", ".env.production")) or "/config" in file_path:
         score += 1
         features["file_context"] = "+1 (env/config file)"
     else:
         features["file_context"] = "0"
 
-    # Feature 7 - Documentation context (negative) ---------------------------
-    # Markdown / docs files that *mention* secrets in prose are not leaks.
     is_doc = any(file_path.endswith(ext) for ext in DOCS_EXTENSIONS)
     if is_doc:
         score -= 4
@@ -199,9 +159,57 @@ def analyze_context(finding: dict) -> tuple[str, int, dict]:
     return classification, score, features
 
 
+def ml_classify(finding: dict, model: dict) -> tuple[str, int, dict]:
+    """Classify a finding using the trained scikit-learn model."""
+    pipeline = model["pipeline"]
+    label_map = model["label_map"]
+    text = build_text_feature(finding)
+
+    # Get the probability prediction
+    proba = pipeline.predict_proba([text])[0]
+    # Get the predicted class
+    pred_class = pipeline.predict([text])[0]
+    label = label_map.get(pred_class, "TEST_FIXTURE")
+
+    # Confidence = probability of the predicted class
+    confidence = float(max(proba))
+    # Convert to a pseudo-score: positive for REAL_LEAK, negative for TEST_FIXTURE
+    if label == "REAL_LEAK":
+        score = round(confidence * 10, 1)
+    else:
+        score = -round(confidence * 10, 1)
+
+    # Extract top contributing tokens for explainability
+    feature_names = pipeline.named_steps["tfidf"].get_feature_names_out()
+    coefficients = pipeline.named_steps["clf"].coef_[0]
+    text_tokens = set(text.lower().split())
+    contributions = []
+    for token in text_tokens:
+        try:
+            idx = list(feature_names).index(token)
+            coef = coefficients[idx]
+            contributions.append((token, float(coef)))
+        except (ValueError, IndexError):
+            continue
+    contributions.sort(key=lambda x: abs(x[1]), reverse=True)
+    top_tokens = contributions[:5]
+
+    features = {
+        "ml_model": "scikit-learn TF-IDF + LogisticRegression",
+        "prediction": label,
+        "confidence": f"{confidence:.1%}",
+        "probabilities": f"REAL_LEAK={proba[1]:.1%}, TEST_FIXTURE={proba[0]:.1%}",
+        "top_tokens": "; ".join(f"{t}({c:+.3f})" for t, c in top_tokens),
+        "total_score": score,
+    }
+    return label, score, features
+
+
+# ---------------------------------------------------------------------------
+# Report generation
+# ---------------------------------------------------------------------------
+
 def load_findings(report_path: str) -> list[dict]:
-    """Load Gitleaks JSON output. Gitleaks can emit either a JSON array of
-    findings or an empty file when nothing is found."""
     if not os.path.exists(report_path):
         return []
     with open(report_path, "r", encoding="utf-8") as f:
@@ -221,17 +229,14 @@ def load_findings(report_path: str) -> list[dict]:
     return []
 
 
-# ---------------------------------------------------------------------------
-# Console report
-# ---------------------------------------------------------------------------
-
-def render_console_summary(findings, real_leaks, quarantined) -> str:
+def render_console_summary(findings, real_leaks, quarantined, mode) -> str:
     lines = []
     lines.append("")
     lines.append("=" * 60)
     lines.append("   SECURITY ANOMALY SUMMARY - AI-Enhanced Secret Detection")
     lines.append("=" * 60)
     lines.append("")
+    lines.append(f"  Classifier mode: {mode}")
     lines.append(f"  Stage 1 (Gitleaks raw detections):  {len(findings)}")
     lines.append(f"  Stage 2 (AI Classifier verdict):")
     lines.append(f"    -> Verified Real Leaks:            {len(real_leaks)}")
@@ -257,7 +262,7 @@ def render_console_summary(findings, real_leaks, quarantined) -> str:
         lines.append("REAL LEAKS DETECTED (classified as REAL_LEAK):")
         lines.append("-" * 60)
         for i, leak in enumerate(real_leaks, 1):
-            link = leak.get("LinkToLine") or leak.get("StartLine", "?")
+            link = leak.get("StartLine", "?")
             lines.append(f"  [{i}] File: {leak.get('File')} | Line: {link}")
             lines.append(f"      Rule: {leak.get('RuleID', '?')}")
             lines.append(f"      Score: {leak['_score']}  (>= 0 = dangerous)")
@@ -277,11 +282,7 @@ def render_console_summary(findings, real_leaks, quarantined) -> str:
     return "\n".join(lines)
 
 
-# ---------------------------------------------------------------------------
-# HTML report (presentation-ready)
-# ---------------------------------------------------------------------------
-
-def generate_html_report(findings, real_leaks, quarantined) -> str:
+def generate_html_report(findings, real_leaks, quarantined, mode) -> str:
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     total = len(findings)
     real_count = len(real_leaks)
@@ -295,7 +296,6 @@ def generate_html_report(findings, real_leaks, quarantined) -> str:
             line_no = f.get("StartLine", "?")
             score = f["_score"]
             secret = html.escape(str(f.get("Secret", "")))
-            # Truncate long secrets for display
             if len(secret) > 60:
                 secret = secret[:57] + "..."
             features_html = ""
@@ -373,7 +373,7 @@ def generate_html_report(findings, real_leaks, quarantined) -> str:
   .safe-row {{ background: rgba(63,185,80,0.05); }}
   .score-bad {{ color: var(--red); font-weight: 700; }}
   .score-good {{ color: var(--green); font-weight: 700; }}
-  .features {{ max-width: 280px; }}
+  .features {{ max-width: 320px; }}
   .feat {{ font-size: 0.75rem; color: var(--text-dim); margin: 0.1rem 0; }}
   .feat b {{ color: var(--text); }}
   .pipeline {{ margin: 1.5rem 0; padding: 1rem; background: var(--card); border-radius: 8px; border: 1px solid var(--border); }}
@@ -381,17 +381,18 @@ def generate_html_report(findings, real_leaks, quarantined) -> str:
   .pipeline .s1 {{ background: rgba(88,166,255,0.15); color: var(--accent); border: 1px solid var(--accent); }}
   .pipeline .s2 {{ background: rgba(210,153,34,0.15); color: var(--yellow); border: 1px solid var(--yellow); }}
   .pipeline .arrow {{ color: var(--text-dim); margin: 0 0.3rem; }}
+  .mode-tag {{ display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; background: rgba(88,166,255,0.1); color: var(--accent); border: 1px solid var(--accent); margin-left: 0.5rem; }}
   footer {{ margin-top: 2rem; color: var(--text-dim); font-size: 0.8rem; text-align: center; }}
 </style>
 </head>
 <body>
-  <h1>AI-Enhanced Secret Detection Report</h1>
-  <p class="subtitle">Generated {now} &middot; Stage 1: Gitleaks &rarr; Stage 2: Contextual ML Classifier</p>
+  <h1>AI-Enhanced Secret Detection Report <span class="mode-tag">{mode}</span></h1>
+  <p class="subtitle">Generated {now} &middot; Stage 1: Gitleaks &rarr; Stage 2: ML Classifier</p>
 
   <div class="pipeline">
     <span class="step s1">Stage 1: Gitleaks (regex + entropy)</span>
     <span class="arrow">&rarr;</span>
-    <span class="step s2">Stage 2: filter_secrets.py (AI context scoring)</span>
+    <span class="step s2">Stage 2: filter_secrets.py (ML inference)</span>
     <span class="arrow">&rarr;</span>
     <span class="step" style="background:rgba({verdict_color == '#e74c3c' and '248,81,73' or '63,185,80'},0.15);color:{verdict_color};border:1px solid {verdict_color}">{verdict_text}</span>
   </div>
@@ -418,8 +419,7 @@ def generate_html_report(findings, real_leaks, quarantined) -> str:
   </table>
 
   <footer>
-    AI-Enhanced Secret Detection Pipeline &middot; Gitleaks v8.18.2 + Contextual ML Classifier
-    <br>Features: path context, value context, syntax context, entropy, provider format, file context, docs context
+    AI-Enhanced Secret Detection Pipeline &middot; Gitleaks v8.18.2 + scikit-learn TF-IDF + LogisticRegression
   </footer>
 </body>
 </html>"""
@@ -431,6 +431,21 @@ def generate_html_report(findings, real_leaks, quarantined) -> str:
 
 def main() -> None:
     report_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_REPORT
+
+    # Load the trained ML model
+    model = None
+    mode = "HEURISTIC (fallback)"
+    if os.path.exists(DEFAULT_MODEL):
+        try:
+            with open(DEFAULT_MODEL, "rb") as f:
+                model = pickle.load(f)
+            mode = "ML MODEL (scikit-learn)"
+            print(f"Loaded trained model from {DEFAULT_MODEL}")
+        except Exception as e:
+            print(f"Warning: could not load model ({e}), using heuristic fallback")
+    else:
+        print(f"No trained model found at {DEFAULT_MODEL}, using heuristic fallback")
+        print("Run 'python train_secret_classifier.py' to train the ML model.")
 
     if not os.path.exists(report_path):
         print("No Gitleaks report found. Assuming clean build.")
@@ -445,7 +460,10 @@ def main() -> None:
     quarantined = []
 
     for finding in findings:
-        classification, score, features = analyze_context(finding)
+        if model:
+            classification, score, features = ml_classify(finding, model)
+        else:
+            classification, score, features = heuristic_classify(finding)
         finding["_classification"] = classification
         finding["_score"] = score
         finding["_features"] = features
@@ -454,12 +472,11 @@ def main() -> None:
         else:
             quarantined.append(finding)
 
-    # Console output
-    print(render_console_summary(findings, real_leaks, quarantined))
+    print(render_console_summary(findings, real_leaks, quarantined, mode))
 
-    # Machine-readable JSON verdict
     verdict = {
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "classifier_mode": mode,
         "total_raw_detections": len(findings),
         "real_leaks_count": len(real_leaks),
         "quarantined_count": len(quarantined),
@@ -473,10 +490,9 @@ def main() -> None:
     except OSError:
         pass
 
-    # HTML report
     try:
         with open("secret-scan-report.html", "w", encoding="utf-8") as out:
-            out.write(generate_html_report(findings, real_leaks, quarantined))
+            out.write(generate_html_report(findings, real_leaks, quarantined, mode))
     except OSError:
         pass
 
