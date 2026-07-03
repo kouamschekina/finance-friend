@@ -49,4 +49,18 @@ paths = [
     '''dist/.*''',
     '''dev-dist/.*''',
     '''\.git/.*''',
+    # ML model artifacts — binary pickle files contain random bytes that
+    # match secret regexes but are NOT real secrets. These are generated
+    # by train_secret_classifier.py and should never be scanned.
+    '''\.pkl$''',
+    '''ml/secret_classifier_dataset\.json''',
+    # Local environment files — these contain developer-specific config
+    # and real API keys for local development. They are .gitignored and
+    # should never be scanned in CI.
+    '''\.env$''',
+    '''\.env\..*''',
+    # Generated scan reports — not source code
+    '''gitleaks-report\.json''',
+    '''secret-scan-verdict\.json''',
+    '''secret-scan-report\.html''',
 ]

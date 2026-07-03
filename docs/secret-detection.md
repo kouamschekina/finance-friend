@@ -1,9 +1,8 @@
 # Section 5 — AI-Enhanced Secret Leakage Detection
 
 > Group 2 deliverable: a 2-stage defense pipeline that finds hardcoded
-> secrets anywhere in the codebase / git history and uses an NLP-style
-> contextual ML classifier to eliminate annoying false positives in test
-> fixtures.
+> secrets in the current working tree and uses a trained scikit-learn ML
+> classifier to eliminate false positives in test fixtures.
 
 ---
 
@@ -12,14 +11,15 @@
 - [1. Problem Statement](#1-problem-statement)
 - [2. Architecture at a Glance](#2-architecture-at-a-glance)
 - [3. Stage 1 — Deterministic Engine (Gitleaks)](#3-stage-1--deterministic-engine-gitleaks)
-- [4. Stage 2 — Contextual ML Classifier (filter_secrets.py)](#4-stage-2--contextual-ml-classifier-filter_secretspy)
-- [5. GitHub Actions Wiring](#5-github-actions-wiring)
-- [6. Demo Files](#6-demo-files)
-- [7. How to Run Locally](#7-how-to-run-locally)
-- [8. Detection Methods Table](#8-detection-methods-table)
-- [9. Quarantine Workflow Diagram](#9-quarantine-workflow-diagram)
-- [10. Files Created / Changed](#10-files-created--changed)
-- [11. Design Decisions & Trade-offs](#11-design-decisions--trade-offs)
+- [4. Stage 2 — Contextual ML Classifier](#4-stage-2--contextual-ml-classifier)
+- [5. How the AI/ML Model Works](#5-how-the-aiml-model-works)
+- [6. GitHub Actions Wiring](#6-github-actions-wiring)
+- [7. Demo Files](#7-demo-files)
+- [8. How to Run Locally](#8-how-to-run-locally)
+- [9. Detection Methods Table](#9-detection-methods-table)
+- [10. Quarantine Workflow Diagram](#10-quarantine-workflow-diagram)
+- [11. Files Created / Changed](#11-files-created--changed)
+- [12. Design Decisions & Trade-offs](#12-design-decisions--trade-offs)
 
 ---
 
@@ -50,29 +50,49 @@ indicate real leaks vs. test fixtures.
 ## 2. Architecture at a Glance
 
 ```
-[Developer Git Push]
+[Developer pushes to feat/loglizer branch]
        |
        v
-[CI/CD Runner Activated]
+[GitHub Actions CI Runner]
+       |
+       +--- Step 1: Checkout code (current branch only, fetch-depth=1)
+       |
+       +--- Step 2: Install scikit-learn, numpy, scipy
+       |
+       +--- Step 3: Train ML model (train_secret_classifier.py)
+       |         |
+       |         +---> Generates ml/secret_classifier_model.pkl
+       |
+       +--- Step 4: Run Gitleaks scan (Stage 1 - Deterministic)
+       |         |
+       |         +---> Scans ONLY the current working tree (--no-git)
+       |         +---> Outputs gitleaks-report.json (raw findings)
+       |
+       +--- Step 5: Run ML classifier (Stage 2 - AI Inference)
+       |         |
+       |         +---> Loads trained model from .pkl
+       |         +---> For each finding: predict() + predict_proba()
+       |         +---> Classifies as REAL_LEAK or TEST_FIXTURE
+       |         +---> Outputs verdict.json + report.html
+       |
+       +--- Step 6: Upload artifacts (reports retained 30 days)
        |
        v
-[Gitleaks Scanner Engine]  ----> generates raw gitleaks-report.json
-       |
-       v
-[filter_secrets.py Classifier]
-       |
-       +----> If [TEST_FIXTURE] ----> [LOG & QUARANTINE] ----> Pipeline PASS
-       |
-       +----> If [REAL_LEAK]    ----> [BLOCK BUILD]       ----> Pipeline FAIL
+   If any REAL_LEAK  -->  BUILD FAILS (pipeline blocked)
+   If all TEST_FIXTURE  -->  BUILD PASSES (fixtures quarantined)
 ```
 
-The two stages are deliberately decoupled:
+### Key design principle: scan scope
 
-* **Stage 1** is a pure deterministic tool (Gitleaks). It can be swapped for
-  TruffleHog without changing Stage 2, as long as the output is JSON.
-* **Stage 2** is a trained scikit-learn model (TF-IDF + LogisticRegression).
-  It reads the JSON report and classifies each finding. The model is trained
-  fresh in CI by `train_secret_classifier.py` on a synthetic labelled dataset.
+The pipeline scans **only the current working tree** of the pushed branch.
+It does **NOT** scan:
+- Git history (old commits, deleted files)
+- Other branches
+- Binary/generated files (`.pkl`, lockfiles, `node_modules/`)
+- Local environment files (`.env`, `.env.*`)
+
+This is achieved with `gitleaks detect --source . --no-git` plus a
+comprehensive allowlist in `.gitleaks.toml`.
 
 ---
 
@@ -91,32 +111,34 @@ What the config does:
 2. **Custom `generic-api-key` rule** — a regex that catches the common
    assignment shape `api_key = "..."`, `password: "..."`, `token = "..."`,
    etc. The `secretGroup = 2` directive tells Gitleaks to report only the
-   captured *value* (group 2) as the secret, not the whole line. This is
-   what Stage 2 inspects.
-3. **`[allowlist]`** — paths Gitleaks must never scan: `node_modules/`,
-   lockfiles, `dist/`, `dev-dist/`, `.git/`. These are either third-party
-   code we don't own or build artefacts; scanning them only produces noise.
+   captured *value* (group 2) as the secret, not the whole line.
+3. **`[allowlist]`** — paths Gitleaks must **never** scan:
+   - `node_modules/`, lockfiles, `dist/`, `dev-dist/`, `.git/` (third-party/build artifacts)
+   - `*.pkl` files (binary ML model files — random bytes match secret regexes)
+   - `ml/secret_classifier_dataset.json` (generated training data)
+   - `.env`, `.env.*` (local environment files with real developer keys)
+   - `gitleaks-report.json`, `secret-scan-verdict.json`, `secret-scan-report.html` (generated reports)
 
 Gitleaks is invoked with `detect --source . --no-git` so it scans only the
 current working tree, **not** the full git history. This prevents old
 secrets committed in earlier commits from re-firing on every CI run — the
-pipeline catches *new* leaks, not historical ones. The `|| true` guard
-ensures the job does not abort before Stage 2 runs — the classifier, not
-the scanner, makes the final pass/fail decision.
+pipeline catches *new* leaks in the current branch, not historical ones.
+The `|| true` guard ensures the job does not abort before Stage 2 runs —
+the classifier, not the scanner, makes the final pass/fail decision.
 
 ---
 
-## 4. Stage 2 — Contextual ML Classifier (filter_secrets.py)
+## 4. Stage 2 — Contextual ML Classifier
 
 **Files:** `train_secret_classifier.py` (training) + `filter_secrets.py`
 (inference). Uses **scikit-learn** (`TfidfVectorizer` +
 `LogisticRegression`) — a real trained ML model, not hand-coded rules.
 
-### 4.1 How the ML model works
-
 The pipeline has two phases:
 
-#### Phase 1: Training (`train_secret_classifier.py`)
+### Phase 1: Training (`train_secret_classifier.py`)
+
+Runs in CI **before** the Gitleaks scan. Takes < 5 seconds.
 
 1. **Dataset generation** — the script generates ~700 synthetic labelled
    findings mimicking real Gitleaks output:
@@ -136,15 +158,15 @@ The pipeline has two phases:
    class.
 
 3. **LogisticRegression training** — a linear classifier that learns
-   which TF-IDF features predict "real leak" vs "test fixture". The model
-   learns weights like:
-   - `env`, `const`, `src`, `config` → positive weights (real leak signal)
-   - `tests`, `fixture`, `mock`, `expect` → negative weights (test signal)
+   which TF-IDF features predict "real leak" vs "test fixture".
 
 4. **Serialization** — the trained pipeline is pickled to
    `ml/secret_classifier_model.pkl` for use at inference time.
 
-#### Phase 2: Inference (`filter_secrets.py`)
+### Phase 2: Inference (`filter_secrets.py`)
+
+Runs **after** the Gitleaks scan. Loads the trained model and classifies
+each finding.
 
 1. **Load** the pickled model from `ml/secret_classifier_model.pkl`.
 2. For each Gitleaks finding, **build the text feature** (same format as
@@ -161,7 +183,50 @@ If the model file is missing (e.g. running locally without training), the
 script falls back to a heuristic scoring mode with the same feature
 structure, so the pipeline never breaks.
 
-### 4.2 What the model learned
+---
+
+## 5. How the AI/ML Model Works
+
+### 5.1 What is TF-IDF?
+
+**TF-IDF** (Term Frequency–Inverse Document Frequency) is a classic NLP
+technique that converts text into numerical feature vectors. It measures
+how important a word is to a document in a collection:
+
+- **TF (Term Frequency):** How often a token appears in the text
+- **IDF (Inverse Document Frequency):** How rare the token is across all
+  documents (common tokens like "the" get low weight; distinctive tokens
+  like "tests" or "env" get high weight)
+
+In our pipeline, each "document" is the concatenation of:
+```
+<file_path> + " " + <line_content> + " " + <secret_value>
+```
+
+For example:
+```
+tests/fixtures.json "aws_key": "AKIAIOSFODNN7EXAMPLE" AKIAIOSFODNN7EXAMPLE
+```
+
+The TF-IDF vectorizer converts this text into a vector of ~thousands of
+dimensions, where each dimension represents a token (or pair of tokens,
+since we use `ngram_range=(1, 2)`).
+
+### 5.2 What is LogisticRegression?
+
+**LogisticRegression** is a linear classifier that learns a weight for
+each TF-IDF feature. At inference time, it computes:
+
+```
+score = w1*tfidf("tests") + w2*tfidf("const") + w3*tfidf("env") + ...
+```
+
+If the score is positive → REAL_LEAK. If negative → TEST_FIXTURE.
+
+The `predict_proba()` function converts this score into a probability
+using the sigmoid function, giving us a **confidence** (e.g. 97.7%).
+
+### 5.3 What the model learned
 
 After training on 700 synthetic samples, the model learned these top
 TF-IDF token weights:
@@ -172,63 +237,73 @@ TF-IDF token weights:
 | `const` | +3.14 | REAL_LEAK (production code pattern) |
 | `src` | +2.20 | REAL_LEAK (production source path) |
 | `config` | +1.72 | REAL_LEAK (config files) |
+| `token` | +1.31 | REAL_LEAK (token assignment) |
+| `password` | +1.05 | REAL_LEAK (password assignment) |
 | `tests` | −2.97 | TEST_FIXTURE (test directory) |
-| `fixture` | −1.72 | TEST_FIXTURE (fixture directory) |
-| `mock` | −1.87 | TEST_FIXTURE (mock directory) |
+| `key` | −2.73 | TEST_FIXTURE (fixture key name) |
+| `test` | −2.09 | TEST_FIXTURE (test directory) |
+| `json` | −1.89 | TEST_FIXTURE (fixture file format) |
+| `mocks` | −1.87 | TEST_FIXTURE (mock directory) |
+| `fixtures` | −1.72 | TEST_FIXTURE (fixture directory) |
 | `expect` | −1.33 | TEST_FIXTURE (assertion syntax) |
 | `spec` | −1.30 | TEST_FIXTURE (spec directory) |
 
-### 4.3 Fallback heuristic mode
+### 5.4 Training accuracy
 
-If the trained model is missing, `filter_secrets.py` falls back to a
-heuristic scoring model with the same 7 features (path, value, syntax,
-entropy, provider, file, docs context) and hand-coded weights. This
-ensures the pipeline never breaks even without scikit-learn installed.
+The model achieves **100% training accuracy** on the synthetic dataset.
+This is expected because the synthetic data has clear separating features
+(test paths vs production paths, placeholder tokens vs real-looking values).
 
-### 4.4 Robustness details
+### 5.5 Explainability
 
-* Handles both Gitleaks JSON shapes (bare array, or `{findings: [...]}`).
-* Treats a missing/empty/unparseable report as **clean** (exit 0) so a
-  scanner hiccup never blocks development.
-* Writes a machine-readable `secret-scan-verdict.json` and a visual
-  `secret-scan-report.html` (uploaded as CI artifacts).
-* Field-name agnostic: reads `File`/`file`, `Line`/`line`,
-  `Secret`/`secret`, `RuleID`/`rule_id`, `LinkToLine`/`StartLine`.
+For each finding, the classifier reports:
+- **Prediction:** REAL_LEAK or TEST_FIXTURE
+- **Confidence:** probability (e.g. 97.7%)
+- **Probabilities:** REAL_LEAK=X%, TEST_FIXTURE=Y%
+- **Top tokens:** the 5 most influential tokens and their learned weights
 
-### 4.5 Worked example (the demo)
+This makes the model's decisions fully auditable — you can see *why* it
+classified each finding the way it did.
 
-Given a report with two findings:
+### 5.6 Fallback heuristic mode
 
-| Finding | ML Prediction | Confidence | Verdict |
+If the trained model is missing (e.g. running locally without scikit-learn),
+`filter_secrets.py` falls back to a heuristic scoring model with 7 features:
+
+| # | Feature | Signal | Weight |
 |---|---|---|---|
-| `AKIAIOSFODNN7EXAMPLE` in `tests/fixtures.json` | TEST_FIXTURE | 96.5% | Quarantined, build passes |
-| `sk_live_51Nx…` in `src/config.js` | REAL_LEAK | 97.7% | Build fails |
+| 1 | Path context | file path contains `test`, `fixture`, `mock`, `spec` | −3 |
+| 2 | Value context | secret contains `dummy`, `placeholder`, `example`, `123456` | −5 |
+| 3 | Syntax context | line contains `expect(`, `assert`, `toMatchSnapshot` | −2 |
+| 4 | Entropy context | Shannon entropy of secret value | +2/−1 |
+| 5 | Provider context | matches `AKIA…`, `sk_live_…`, `ghp_…` regex | +3 |
+| 6 | File context | path ends in `.env` or contains `/config` | +1 |
+| 7 | Docs context | path ends in `.md`, `.rst`, `.txt` | −4 |
 
-The model learned that `tests/` paths and `example`/`placeholder` tokens
-strongly indicate test fixtures, while `src/` paths, `const` assignments,
-and `.env` files indicate real leaks.
+Decision: `total_score >= 0` → REAL_LEAK; `total_score < 0` → TEST_FIXTURE.
 
 ---
 
-## 5. GitHub Actions Wiring
+## 6. GitHub Actions Wiring
 
 **File:** `.github/workflows/security.yml`
 
 The workflow:
 
-1. **Triggers** on every `push` and `pull_request` (plus manual
-   `workflow_dispatch`).
+1. **Triggers** on every `push` to `main`, `master`, `feat/*` branches
+   and `pull_request` to `main`/`master` (plus manual `workflow_dispatch`).
 2. **Checks out** the repo (default `fetch-depth: 1` — we scan only the
-   working tree, not git history).
+   current working tree, not git history).
 3. **Sets up Python 3.11** and installs scikit-learn, numpy, scipy.
 4. **Stage 2a (Train)** — runs `python train_secret_classifier.py` to
    generate `ml/secret_classifier_model.pkl` from the synthetic dataset.
 5. **Stage 1** — downloads the Gitleaks binary, runs `gitleaks detect
-   --source . --no-git` against `.gitleaks.toml`, writes
-   `gitleaks-report.json`. The `|| true` keeps the job alive.
+   --source . --config .gitleaks.toml --no-git --verbose` to scan only
+   the current working tree. Writes `gitleaks-report.json`. The `|| true`
+   keeps the job alive so Stage 2 can run.
 6. **Stage 2b (Inference)** — runs `python filter_secrets.py
    gitleaks-report.json`. It loads the trained model and classifies each
-   finding. Its exit code decides pass/fail.
+   finding. Its exit code decides pass/fail (0 = pass, 1 = fail).
 7. **Uploads** the raw Gitleaks report, the JSON verdict, and the HTML
    report as a 30-day artifact for auditing.
 
@@ -236,13 +311,33 @@ The workflow is intentionally separate from the existing
 `.github/workflows/loglizer.yml` (log-anomaly detection) so each security
 concern runs and fails independently.
 
+### What gets scanned
+
+Only the **current working tree** of the pushed branch. Specifically
+excluded via `.gitleaks.toml` allowlist:
+- `node_modules/`, `dist/`, `dev-dist/`, `.git/`
+- `*.pkl` (binary ML model files)
+- `ml/secret_classifier_dataset.json` (generated training data)
+- `.env`, `.env.*` (local environment files)
+- Lockfiles (`package-lock.json`, `bun.lock.*`)
+- Generated reports (`gitleaks-report.json`, `secret-scan-verdict.json`, `secret-scan-report.html`)
+
+### What does NOT get scanned
+
+- **Git history** — old commits, deleted files, commit messages
+- **Other branches** — only the pushed branch is checked out
+- **Binary files** — `.pkl` files contain random bytes that match secret
+  regexes but are not real secrets
+- **Environment files** — `.env` files contain real developer API keys
+  for local development and are .gitignored
+
 ---
 
-## 6. Demo Files
+## 7. Demo Files
 
 Two intentionally-planted files let you demonstrate the classifier live:
 
-### 6.1 False positive — `tests/fixtures.json`
+### 7.1 False positive — `tests/fixtures.json`
 
 ```json
 {
@@ -256,7 +351,7 @@ Gitleaks flags all three. The ML model classifies them as TEST_FIXTURE
 (96.5% confidence) because the `tests/` path and `example`/`dummy`/
 `placeholder` tokens are strong test-fixture signals. Build **passes**.
 
-### 6.2 Real leak — `src/config.js`
+### 7.2 Real leak — `src/config.js`
 
 ```js
 const stripeKey = "sk_live_51Nx<REDACTED>";
@@ -270,13 +365,9 @@ Gitleaks flags it. The ML model classifies it as REAL_LEAK (97.7%
 confidence) because `src/` paths, `const` assignments, and `sk_live_`
 provider prefixes are strong real-leak signals. Build **fails**.
 
-> ⚠️ `src/config.js` is a **synthetic demo file**. The key is fake. Remove
-> or gitignore it before any real deployment; it exists only to prove the
-> pipeline blocks real-looking leaks.
-
 ---
 
-## 7. How to Run Locally
+## 8. How to Run Locally
 
 ### Full pipeline (needs Gitleaks + scikit-learn installed)
 
@@ -291,7 +382,7 @@ pip install scikit-learn numpy scipy
 # train the model (one-off, generates ml/secret_classifier_model.pkl)
 python3 train_secret_classifier.py
 
-# run stage 1
+# run stage 1 (scan only the current working tree)
 gitleaks detect --source . --config .gitleaks.toml --no-git --verbose \
   --report-format json --report-path=gitleaks-report.json || true
 
@@ -319,7 +410,7 @@ python3 filter_secrets.py   # prints "No Gitleaks report found..." exit 0
 
 ---
 
-## 8. Detection Methods Table
+## 9. Detection Methods Table
 
 | Target Threat | Native Tool | AI Enrichment Layer | Outcome |
 |---|---|---|---|
@@ -327,46 +418,50 @@ python3 filter_secrets.py   # prints "No Gitleaks report found..." exit 0
 
 ---
 
-## 9. Quarantine Workflow Diagram
+## 10. Quarantine Workflow Diagram
 
 ```
-[Developer Git Push]
+[Developer pushes to feat/loglizer branch]
        |
        v
-[CI/CD Runner Activated]
+[GitHub Actions CI Runner]
        |
        v
-[Gitleaks Scanner Engine]  ----> generates raw gitleaks-report.json
+[Train ML Model] ---> ml/secret_classifier_model.pkl
        |
        v
-[filter_secrets.py Classifier]
+[Gitleaks Scanner] ---> gitleaks-report.json (raw findings)
+       |                (scans ONLY current working tree, --no-git)
+       v
+[ML Classifier (filter_secrets.py)]
        |
        +----> If [TEST_FIXTURE] ----> [LOG & QUARANTINE] ----> Pipeline PASS
        |
        +----> If [REAL_LEAK]    ----> [BLOCK BUILD]       ----> Pipeline FAIL
+       |
+       v
+[Upload artifacts: gitleaks-report.json, verdict.json, report.html]
 ```
 
 ---
 
-## 10. Files Created / Changed
+## 11. Files Created / Changed
 
 | Path | Purpose | New/Changed |
 |---|---|---|
 | `.gitleaks.toml` | Gitleaks rules + allowlist (Stage 1 config) | New |
 | `train_secret_classifier.py` | Trains scikit-learn TF-IDF + LogisticRegression model | New |
-| `filter_secrets.py` | ML inference classifier (Stage 2) | Changed |
-| `.github/workflows/security.yml` | CI automation for all stages | Changed |
+| `filter_secrets.py` | ML inference classifier (Stage 2) | New |
+| `.github/workflows/security.yml` | CI automation for all stages | New |
 | `tests/fixtures.json` | Demo false-positive fixtures | New |
 | `src/config.js` | Demo real-leak file (synthetic key, .gitignored) | New |
-| `ml/secret_classifier_model.pkl` | Trained model (generated in CI) | Generated |
-| `ml/secret_classifier_dataset.json` | Training dataset (for inspection) | Generated |
+| `ml/secret_classifier_model.pkl` | Trained model (generated in CI, .gitignored) | Generated |
+| `ml/secret_classifier_dataset.json` | Training dataset (generated, .gitignored) | Generated |
 | `docs/secret-detection.md` | This document | New |
-
-No existing source files were modified.
 
 ---
 
-## 11. Design Decisions & Trade-offs
+## 12. Design Decisions & Trade-offs
 
 **Why Gitleaks over TruffleHog for Stage 1?**
 Gitleaks emits clean JSON, has a TOML config that's easy to extend, and
@@ -402,7 +497,21 @@ the repo would block development. The whole point of Stage 2 is to be the
 **Why `--no-git` (working tree only)?**
 Scanning the full git history would re-fire alerts for secrets that were
 already committed and dealt with. The pipeline catches *new* leaks in the
-current working tree, not historical ones.
+current working tree, not historical ones. This also prevents the scan
+from picking up secrets in old commits, deleted files, or other branches.
+
+**Why are `.pkl` files excluded from the scan?**
+The trained model (`ml/secret_classifier_model.pkl`) is a binary pickle
+file. Its raw bytes happen to match secret regex patterns (GitHub tokens,
+Stripe keys, etc.) because the model's learned weights encode token
+patterns. Scanning it produces hundreds of false positives that are not
+real secrets — they're just binary data that coincidentally matches.
+
+**Why are `.env` files excluded from the scan?**
+`.env` files contain real API keys for local development (Groq, Supabase,
+etc.). These are developer-specific configuration files, not source code.
+They are `.gitignore`d and should never be scanned in CI — the developer
+is responsible for managing their own local secrets.
 
 **Why is `src/config.js` committed at all?**
 It's a deliberate demo artifact. In a real repo you'd remove it (or
